@@ -54,6 +54,17 @@ export function EmailGenerator() {
   const [subject, setSubject] = useState("")
   const [emailBody, setEmailBody] = useState("")
   const [warmth, setWarmth] = useState([50])
+  const [recipientEmail, setRecipientEmail] = useState("")
+  const [extractedEmails, setExtractedEmails] = useState<string[]>([])
+  const [showEmailDropdown, setShowEmailDropdown] = useState(false)
+  const [senderEmail, setSenderEmail] = useState("personal@example.com")
+
+  // Sender email options
+  const senderOptions = [
+    { value: "krishivkhatri2409@gmail.com", label: "krishivkhatri2409@gmail.com" },
+    { value: "personal@example.com", label: "personal@example.com" },
+    { value: "work@company.com", label: "work@company.com" }
+  ]
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -68,6 +79,7 @@ export function EmailGenerator() {
           goal: goal === 'other' ? customGoal : goal,
           tone: tone,
           userName: 'Alex Johnson', // TODO: Get from user profile
+          recipientEmail: recipientEmail
         }),
       });
 
@@ -78,6 +90,22 @@ export function EmailGenerator() {
       const data = await response.json();
       setSubject(data.subject);
       setEmailBody(data.body);
+      
+      // Handle extracted emails
+      if (data.extractedEmails && data.extractedEmails.length > 0) {
+        setExtractedEmails(data.extractedEmails);
+        
+        // Auto-set the first email if none is already set
+        if (!recipientEmail && data.recipientEmail) {
+          setRecipientEmail(data.recipientEmail);
+        }
+        
+        // Show the dropdown if we have multiple emails
+        if (data.extractedEmails.length > 1) {
+          setShowEmailDropdown(true);
+        }
+      }
+      
       setGenerated(true);
     } catch (error) {
       console.error('Error generating email:', error);
@@ -88,6 +116,11 @@ export function EmailGenerator() {
   };
 
   const handleSend = async () => {
+    if (!recipientEmail) {
+      alert("Please enter a recipient email address");
+      return;
+    }
+    
     try {
       const response = await fetch('/api/send-email', {
         method: 'POST',
@@ -95,23 +128,29 @@ export function EmailGenerator() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          to: 'aditya.jain2702@gmail.com', // TODO: Get from user input
+          to: recipientEmail,
+          from: senderEmail,
           subject,
           html: emailBody.replace(/\n/g, '<br>'),
         }),
       });
 
+      const responseData = await response.json();
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send email');
+        // Extract the error message from the response
+        const errorMessage = responseData.error && typeof responseData.error === 'string' 
+          ? responseData.error 
+          : responseData.error?.message || 'Failed to send email';
+        
+        throw new Error(errorMessage);
       }
-
 
       alert("Email sent successfully! 🎉");
     } catch (error) {
       console.error('Error sending email:', error);
-      alert("Failed to send email. Please try again.");
+      // Show a more informative error message
+      alert(error instanceof Error ? error.message : "Failed to send email. Please try again.");
     }
   }
 
@@ -255,15 +294,62 @@ export function EmailGenerator() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="sender">Send from</Label>
-                    <Select defaultValue="personal">
+                    <Select value={senderEmail} onValueChange={setSenderEmail}>
                       <SelectTrigger id="sender">
                         <SelectValue placeholder="Select email account" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="personal">personal@example.com</SelectItem>
-                        <SelectItem value="work">work@company.com</SelectItem>
+                        {senderOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="recipient">Send to</Label>
+                    <div className="relative">
+                      <Input 
+                        id="recipient" 
+                        placeholder="recipient@example.com"
+                        value={recipientEmail}
+                        onChange={(e) => setRecipientEmail(e.target.value)}
+                        onFocus={() => extractedEmails.length > 0 && setShowEmailDropdown(true)}
+                      />
+                      {showEmailDropdown && extractedEmails.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border border-gray-200">
+                          <ul className="py-1 max-h-56 overflow-auto">
+                            {extractedEmails.map((email, index) => (
+                              <li 
+                                key={index} 
+                                className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                onClick={() => {
+                                  setRecipientEmail(email);
+                                  setShowEmailDropdown(false);
+                                }}
+                              >
+                                {email}
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="py-1 border-t border-gray-200">
+                            <div 
+                              className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-500"
+                              onClick={() => setShowEmailDropdown(false)}
+                            >
+                              Close
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {extractedEmails.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {extractedEmails.length} email{extractedEmails.length !== 1 ? 's' : ''} found on webpage
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

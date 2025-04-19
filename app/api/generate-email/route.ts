@@ -66,6 +66,7 @@ interface GenerateEmailRequest {
   tone: string;
   userName: string;
   recipientName?: string;
+  recipientEmail?: string;
   url?: string;
 }
 
@@ -123,6 +124,40 @@ function extractNameFromUrl(url: string): string | null {
     console.error('Error parsing URL:', error);
     return null;
   }
+}
+
+// Function to extract email addresses from content
+function extractEmails(content: string, $: cheerio.CheerioAPI): string[] {
+  const emails: string[] = [];
+  
+  // Extract from mailto links
+  $('a[href^="mailto:"]').each((_, element) => {
+    const href = $(element).attr('href');
+    if (href) {
+      const email = href.replace('mailto:', '').split('?')[0].trim();
+      if (isValidEmail(email) && !emails.includes(email)) {
+        emails.push(email);
+      }
+    }
+  });
+  
+  // Extract from text content using regex
+  const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+  const contentEmails = content.match(emailRegex) || [];
+  
+  for (const email of contentEmails) {
+    if (isValidEmail(email) && !emails.includes(email)) {
+      emails.push(email);
+    }
+  }
+  
+  return emails;
+}
+
+// Simple email validation function
+function isValidEmail(email: string): boolean {
+  const re = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}$/i;
+  return re.test(email);
 }
 
 async function extractContactName($: cheerio.CheerioAPI, cleanedContent: string, url?: string): Promise<string> {
@@ -295,7 +330,8 @@ export async function POST(request: Request) {
   try {
     // Parse the request body
     const body: GenerateEmailRequest = await request.json();
-    let { urlContent, goal, tone, userName, recipientName, url } = body;
+    let { urlContent, goal, tone, userName, recipientName, recipientEmail, url } = body;
+    let extractedEmails: string[] = [];
 
     // If URL is provided, fetch and process the content
     if (url) {
@@ -328,6 +364,9 @@ export async function POST(request: Request) {
         if (!recipientName) {
           recipientName = await extractContactName($, cleanedContent, url);
         }
+
+        // Extract email addresses
+        extractedEmails = extractEmails(cleanedContent, $);
 
         // Use the cleaned content
         urlContent = cleanedContent;
@@ -399,7 +438,9 @@ Make sure the email is concise, professional, and genuinely engaging.`;
       const emailData = JSON.parse(cleanedText);
       return NextResponse.json({
         ...emailData,
-        recipientName: recipientName || 'Professor'
+        recipientName: recipientName || 'Professor',
+        recipientEmail: recipientEmail || extractedEmails[0] || '',
+        extractedEmails: extractedEmails
       });
     } catch (parseError) {
       console.error('Error parsing Gemini response:', parseError);
@@ -411,7 +452,9 @@ Make sure the email is concise, professional, and genuinely engaging.`;
         return NextResponse.json({
           subject: subjectMatch[1],
           body: bodyMatch[1],
-          recipientName: recipientName || 'Professor'
+          recipientName: recipientName || 'Professor',
+          recipientEmail: recipientEmail || extractedEmails[0] || '',
+          extractedEmails: extractedEmails
         });
       } else {
         throw new Error('Could not parse response format');
