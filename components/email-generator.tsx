@@ -38,8 +38,8 @@ const tones = [
 
 const goals = [
   { value: "internship", label: "Internship" },
-  { value: "research", label: "Research Collaboration" },
-  { value: "partnership", label: "Business Partnership" },
+  { value: "research", label: "Research position" },
+  { value: "partnership", label: "Business partnership" },
   { value: "networking", label: "Networking" },
   { value: "other", label: "Other" },
 ]
