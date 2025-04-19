@@ -68,7 +68,6 @@ export function EmailGenerator() {
           goal: goal === 'other' ? customGoal : goal,
           tone: tone,
           userName: 'Alex Johnson', // TODO: Get from user profile
-          recipientName: 'Professor Smith', // TODO: Extract from URL content
         }),
       });
 
