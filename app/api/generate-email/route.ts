@@ -225,6 +225,10 @@ Make sure the email is concise, professional, and genuinely engaging.`;
     // Clean the response text by removing markdown code block formatting
     const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim();
     
+    if (!text) {
+      throw new Error('No response text received from Gemini');
+    }
+    
     // Parse the JSON response
     try {
       const emailData = JSON.parse(cleanedText);
