@@ -87,10 +87,34 @@ export function EmailGenerator() {
     }
   };
 
-  const handleSend = () => {
-    // Implement send functionality
-    alert("Email sent successfully! 🎉")
+  const handleSend = async () => {
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: 'aditya.jain2702@gmail.com', // TODO: Get from user input
+          subject,
+          html: emailBody.replace(/\n/g, '<br>'),
+        }),
+      });
+
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send email');
+      }
+
+
+      alert("Email sent successfully! 🎉");
+    } catch (error) {
+      console.error('Error sending email:', error);
+      alert("Failed to send email. Please try again.");
+    }
   }
+
 
   return (
     <div className="space-y-6">
