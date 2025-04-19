@@ -55,18 +55,38 @@ export function EmailGenerator() {
   const [emailBody, setEmailBody] = useState("")
   const [warmth, setWarmth] = useState([50])
 
-  const handleGenerate = () => {
-    setLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      setSubject("Interested in collaborating on your AI research project")
-      setEmailBody(
-        "Hi Professor Smith,\n\nI came across your recent paper on generative AI models and was particularly impressed by your approach to reducing hallucinations in large language models.\n\nI'm currently working on similar problems at my university, specifically focusing on evaluation metrics for factual consistency. I'd love to discuss potential collaboration opportunities or even just get your thoughts on some ideas I've been exploring.\n\nWould you be open to a brief 15-minute call next week?\n\nBest regards,\nAlex Johnson",
-      )
-      setLoading(false)
-      setGenerated(true)
-    }, 1500)
-  }
+  const handleGenerate = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/generate-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          urlContent: url,
+          goal: goal === 'other' ? customGoal : goal,
+          tone: tone,
+          userName: 'Alex Johnson', // TODO: Get from user profile
+          recipientName: 'Professor Smith', // TODO: Extract from URL content
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate email');
+      }
+
+      const data = await response.json();
+      setSubject(data.subject);
+      setEmailBody(data.body);
+      setGenerated(true);
+    } catch (error) {
+      console.error('Error generating email:', error);
+      alert('Failed to generate email. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSend = () => {
     // Implement send functionality
