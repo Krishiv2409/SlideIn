@@ -396,19 +396,23 @@ export async function POST(request: Request) {
       : urlContent;
 
     // Create a dynamic prompt based on the input parameters
-    const prompt = `Generate a personalized cold email with the following context:
-    
-URL Content: ${truncatedContent}
+    const prompt = `Generate a personalized cold email using the following information:
+
+URL: ${url}
+URL Content Preview: ${truncatedContent}
 Goal: ${goal}
 Tone: ${tone}
 Sender's Name: ${userName}
-Recipient's Name: ${recipientName || 'there'}
+Recipient's Name: ${recipientName || '[Name]'}
 
-Please analyze the URL content and create a short, direct email that:
-1. References something specific from the content
+First, analyze both the provided URL content preview AND search the URL directly to gather more context and specific details about the recipient/company.
+
+Then, create a short, direct email that:
+1. References specific, relevant details from both the URL and your search of it
 2. Matches the specified tone ("${tone}")
 3. Clearly states the sender's goal
 4. Sounds natural and human-like, not like a template
+5. Shows you've done your research by mentioning recent or notable information from the URL
 
 The response must be in valid JSON format with exactly these fields:
 {
@@ -416,7 +420,11 @@ The response must be in valid JSON format with exactly these fields:
   "body": "The complete email body"
 }
 
-Make sure the email is concise, professional, and genuinely engaging.`;
+Make sure the email is:
+- Concise and professional
+- Genuinely engaging
+- Demonstrates knowledge of the recipient/company
+- Includes specific details that show you've actually looked at their content`;
 
     // Generate the email using Gemini
     const response = await ai.models.generateContent({
