@@ -10,4 +10,4 @@ export default function InboxPage() {
       <InboxTracker />
     </div>
   )
-}
+} 
