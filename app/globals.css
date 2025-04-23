@@ -77,3 +77,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media (min-width: 1536px) {
+  html {
+    font-size: calc(16px + 0.2vw);
+  }
+}
