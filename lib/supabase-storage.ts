@@ -1,4 +1,4 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 
 export interface GmailTokens {
   access_token: string;
@@ -12,7 +12,10 @@ export interface GmailTokens {
 export const saveGmailTokens = async (tokens: GmailTokens): Promise<void> => {
   try {
     console.log('Attempting to save Gmail tokens:', { tokens });
-    const supabase = createClientComponentClient();
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
     
     // First check if we have a session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -71,7 +74,10 @@ export const saveGmailTokens = async (tokens: GmailTokens): Promise<void> => {
 export const getGmailTokens = async (): Promise<GmailTokens | null> => {
   try {
     console.log('Attempting to get Gmail tokens');
-    const supabase = createClientComponentClient();
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
     
     // First check if we have a session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -181,7 +187,10 @@ export const getGmailTokens = async (): Promise<GmailTokens | null> => {
  */
 export const updateGmailTokens = async (partialTokens: Partial<GmailTokens>): Promise<void> => {
   try {
-    const supabase = createClientComponentClient();
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
     
     // First check if we have a session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -219,7 +228,10 @@ export const updateGmailTokens = async (partialTokens: Partial<GmailTokens>): Pr
  */
 export const removeGmailTokens = async (): Promise<void> => {
   try {
-    const supabase = createClientComponentClient();
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
     
     // First check if we have a session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -254,7 +266,10 @@ export const removeGmailTokens = async (): Promise<void> => {
  */
 export const isGmailConnected = async (): Promise<boolean> => {
   try {
-    const supabase = createClientComponentClient();
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
     
     // First check if we have a valid session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();

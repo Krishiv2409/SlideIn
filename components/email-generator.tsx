@@ -14,7 +14,7 @@ import { Slider } from "@/components/ui/slider"
 import { cn } from "@/lib/utils"
 import { getGmailTokens, updateGmailTokens, isGmailConnected } from '@/lib/supabase-storage'
 import { GmailConnectButton } from './gmail-connect-button'
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createBrowserClient } from "@supabase/ssr"
 import { toast } from "sonner"
 
 const tones = [
@@ -71,7 +71,10 @@ export function EmailGenerator() {
     const checkGmailConnection = async () => {
       try {
         console.log('Checking Gmail connection...');
-        const supabase = createClientComponentClient();
+        const supabase = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
         
         // First check if we have a session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
