@@ -95,7 +95,9 @@ export function GmailConnectButton({
               'https://www.googleapis.com/auth/gmail.compose',
               'https://www.googleapis.com/auth/gmail.modify'
             ].join(' ')
-          }
+          },
+          skipBrowserRedirect: false,
+          redirectTo: `${window.location.origin}/api/gmail-auth/callback`
         }
       });
 

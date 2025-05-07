@@ -3,8 +3,14 @@ import { GoogleGenAI } from "@google/genai";
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
-// Initialize Gemini client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+// Initialize Gemini client with validation
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  console.error('GEMINI_API_KEY is not set in environment variables');
+  throw new Error('GEMINI_API_KEY is not configured');
+}
+
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 // Maximum content length to send to Gemini (in characters)
 const MAX_CONTENT_LENGTH = 10000;
@@ -328,14 +334,44 @@ function shouldIgnoreElement($: cheerio.CheerioAPI, element: cheerio.Element): b
 
 export async function POST(request: Request) {
   try {
+    console.log('Starting email generation process...');
+    
     // Parse the request body
     const body: GenerateEmailRequest = await request.json();
     let { urlContent, goal, tone, userName, recipientName, recipientEmail, url } = body;
     let extractedEmails: string[] = [];
 
+    console.log('Request parameters:', { goal, tone, userName, url });
+
+    // Validate required fields
+    if (!urlContent) {
+      console.error('Missing urlContent in request');
+      return NextResponse.json(
+        { error: 'URL content is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!goal) {
+      console.error('Missing goal in request');
+      return NextResponse.json(
+        { error: 'Goal is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!tone) {
+      console.error('Missing tone in request');
+      return NextResponse.json(
+        { error: 'Tone is required' },
+        { status: 400 }
+      );
+    }
+
     // If URL is provided, fetch and process the content
     if (url) {
       try {
+        console.log('Fetching URL content:', url);
         // Fetch the webpage with timeout
         const response = await axios.get(url, {
           timeout: 5000, // 5 second timeout
@@ -371,6 +407,7 @@ export async function POST(request: Request) {
         // Use the cleaned content
         urlContent = cleanedContent;
       } catch (error) {
+        console.error('Error processing URL:', error);
         if (axios.isAxiosError(error)) {
           if (error.code === 'ECONNABORTED') {
             return NextResponse.json(
@@ -395,83 +432,109 @@ export async function POST(request: Request) {
       ? urlContent.substring(0, MAX_CONTENT_LENGTH) + '...'
       : urlContent;
 
+    console.log('Generating email with Gemini...');
+    
     // Create a dynamic prompt based on the input parameters
-    const prompt = `Generate a personalized cold email using the following information:
+    const prompt = `
+      Generate a highly personalized, natural cold email using the following information:
 
-URL: ${url}
-URL Content Preview: ${truncatedContent}
-Goal: ${goal}
-Tone: ${tone}
-Sender's Name: ${userName}
-Recipient's Name: ${recipientName || '[Name]'}
+      - URL: ${url}
+      - URL Content Preview: ${truncatedContent}
+      - Goal: ${goal}
+      - Tone: ${tone}
+      - Sender's Name: ${userName}
+      - Recipient's Name: ${recipientName || '[Name]'}
 
-First, analyze both the provided URL content preview AND search the URL directly to gather more context and specific details about the recipient/company.
+      Before writing:
+      1. Deeply analyze the provided URL content preview.
+      2. Attempt to infer or simulate a live search of the URL and related company information.
+      3. Identify and extract at least 2 specific, verifiable insights (such as recent news, launches, achievements, or leadership updates).
 
-Then, create a short, direct email that:
-1. References specific, relevant details from both the URL and your search of it
-2. Matches the specified tone ("${tone}")
-3. Clearly states the sender's goal
-4. Sounds natural and human-like, not like a template
-5. Shows you've done your research by mentioning recent or notable information from the URL
+      **Do not** proceed to writing the email if you cannot find specific details — instead, thoughtfully reflect on the provided preview.
 
-The response must be in valid JSON format with exactly these fields:
-{
-  "subject": "The email subject line",
-  "body": "The complete email body"
-}
+      Email writing rules:
+      - You must *mention exact and real* details that show clear research.
+      - Absolutely **no placeholders** like [insert company project].
+      - The email must *feel naturally written by a human*, not like a template.
+      - Match the requested tone ("${tone}").
+      - Clearly state the sender's goal and end with a friendly, low-pressure call to action.
+      - Keep the body under 150 words unless a slightly longer message fits the tone.
 
-Make sure the email is:
-- Concise and professional
-- Genuinely engaging
-- Demonstrates knowledge of the recipient/company
-- Includes specific details that show you've actually looked at their content`;
+      Return the output strictly in this valid JSON format:
+      {
+        "subject": "Short and personalized subject line",
+        "body": "The fully written email body"
+      }
 
-    // Generate the email using Gemini
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-    });
+      Important:
+      - If URL information is insufficient, say so naturally in the email, but still make it sound like you made an effort.
+      - Prioritize being real, human, and engaging over sounding formal or robotic.
+      - Use complete sentences. Avoid buzzwords and generic phrases like "innovative solutions" or "dynamic environment" unless specifically referenced from research.
 
-    const text = response.text || '';
-    
-    // Clean the response text by removing markdown code block formatting
-    const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim();
-    
-    if (!text) {
-      throw new Error('No response text received from Gemini');
-    }
-    
-    // Parse the JSON response
+      Language: English.
+    `;
+
     try {
-      const emailData = JSON.parse(cleanedText);
-      return NextResponse.json({
-        ...emailData,
-        recipientName: recipientName || 'Professor',
-        recipientEmail: recipientEmail || extractedEmails[0] || '',
-        extractedEmails: extractedEmails
+      // Generate the email using Gemini
+      console.log('Sending request to Gemini API...');
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: prompt,
       });
-    } catch (parseError) {
-      console.error('Error parsing Gemini response:', parseError);
-      // If JSON parsing fails, try to extract subject and body using regex
-      const subjectMatch = cleanedText.match(/"subject":\s*"([^"]+)"/);
-      const bodyMatch = cleanedText.match(/"body":\s*"([^"]+)"/);
+
+      console.log('Received response from Gemini');
+
+      const text = response.text || '';
       
-      if (subjectMatch && bodyMatch) {
+      if (!text) {
+        console.error('No response text received from Gemini');
+        throw new Error('No response text received from Gemini');
+      }
+      
+      // Clean the response text by removing markdown code block formatting
+      const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim();
+      
+      // Parse the JSON response
+      try {
+        console.log('Parsing Gemini response...');
+        const emailData = JSON.parse(cleanedText);
+        console.log('Successfully parsed response');
         return NextResponse.json({
-          subject: subjectMatch[1],
-          body: bodyMatch[1],
+          ...emailData,
           recipientName: recipientName || 'Professor',
           recipientEmail: recipientEmail || extractedEmails[0] || '',
           extractedEmails: extractedEmails
         });
-      } else {
-        throw new Error('Could not parse response format');
+      } catch (parseError) {
+        console.error('Error parsing Gemini response:', parseError);
+        console.error('Raw response:', cleanedText);
+        // If JSON parsing fails, try to extract subject and body using regex
+        const subjectMatch = cleanedText.match(/"subject":\s*"([^"]+)"/);
+        const bodyMatch = cleanedText.match(/"body":\s*"([^"]+)"/);
+        
+        if (subjectMatch && bodyMatch) {
+          return NextResponse.json({
+            subject: subjectMatch[1],
+            body: bodyMatch[1],
+            recipientName: recipientName || 'Professor',
+            recipientEmail: recipientEmail || extractedEmails[0] || '',
+            extractedEmails: extractedEmails
+          });
+        } else {
+          throw new Error('Could not parse response format');
+        }
       }
+    } catch (error) {
+      console.error('Error calling Gemini API:', error);
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Failed to generate email with AI' },
+        { status: 500 }
+      );
     }
   } catch (error) {
-    console.error('Error generating email:', error);
+    console.error('Error in email generation process:', error);
     return NextResponse.json(
-      { error: 'Failed to generate email' },
+      { error: error instanceof Error ? error.message : 'Failed to generate email' },
       { status: 500 }
     );
   }

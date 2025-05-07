@@ -130,7 +130,6 @@ export function EmailGenerator() {
 
   // Sender email options
   const senderOptions = [
-    { value: "krishivkhatri2409@gmail.com", label: "krishivkhatri2409@gmail.com" },
     { value: "personal@example.com", label: "personal@example.com" },
     { value: "work@company.com", label: "work@company.com" }
   ]
@@ -138,6 +137,11 @@ export function EmailGenerator() {
   const handleGenerate = async () => {
     setLoading(true);
     try {
+      if (!url) {
+        toast.error("Please enter a URL");
+        return;
+      }
+
       const response = await fetch('/api/generate-email', {
         method: 'POST',
         headers: {
@@ -148,15 +152,17 @@ export function EmailGenerator() {
           goal: goal === 'other' ? customGoal : goal,
           tone: tone,
           userName: 'Alex Johnson', // TODO: Get from user profile
-          recipientEmail: recipientEmail
+          recipientEmail: recipientEmail,
+          url: url // Add the URL parameter
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to generate email');
+        throw new Error(data.error || 'Failed to generate email');
       }
 
-      const data = await response.json();
       setSubject(data.subject);
       setEmailBody(data.body);
       
@@ -178,7 +184,7 @@ export function EmailGenerator() {
       setGenerated(true);
     } catch (error) {
       console.error('Error generating email:', error);
-      alert('Failed to generate email. Please try again.');
+      toast.error(error instanceof Error ? error.message : 'Failed to generate email. Please try again.');
     } finally {
       setLoading(false);
     }

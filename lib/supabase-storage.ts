@@ -61,10 +61,7 @@ export const saveGmailTokens = async (tokens: GmailTokens): Promise<void> => {
     console.log('Successfully saved/updated Gmail tokens:', data);
   } catch (error) {
     console.error('Error in saveGmailTokens:', error);
-    if (error instanceof Error) {
-      throw new Error(`Failed to save Gmail tokens: ${error.message}`);
-    }
-    throw new Error('Failed to save Gmail tokens: Unknown error');
+    throw error;
   }
 };
 
@@ -127,46 +124,58 @@ export const getGmailTokens = async (): Promise<GmailTokens | null> => {
 
     if (data.expiry_date < currentTime + 5 * 60 * 1000) {
       try {
-        console.log('Attempting to refresh token');
-        const response = await fetch('/api/gmail-auth/refresh', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            refresh_token: data.refresh_token
-          }),
-        });
-
-        console.log('Token refresh response status:', response.status);
-
-        if (!response.ok) {
-          console.error('Failed to refresh token:', await response.text());
-          return null;
-        }
-
-        const refreshedTokens = await response.json();
-        console.log('Refreshed tokens:', refreshedTokens);
+        console.log('Attempting to refresh token via Supabase');
+        const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
         
-        if (!refreshedTokens.success) {
-          console.error('Token refresh failed:', refreshedTokens.error);
+        if (refreshError) {
+          console.error('Error refreshing session:', refreshError);
           return null;
         }
+
+        if (!session?.provider_token) {
+          console.error('No provider token in refreshed session, attempting to re-authenticate');
+          // Try to get a new session with provider token
+          const { data: { url }, error: signInError } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              queryParams: {
+                access_type: 'offline',
+                prompt: 'consent',
+                scope: [
+                  'email',
+                  'profile',
+                  'https://www.googleapis.com/auth/gmail.send',
+                  'https://www.googleapis.com/auth/gmail.compose',
+                  'https://www.googleapis.com/auth/gmail.modify'
+                ].join(' ')
+              },
+              skipBrowserRedirect: false,
+              redirectTo: `${window.location.origin}/settings`
+            }
+          });
+
+          if (signInError || !url) {
+            console.error('Failed to re-authenticate:', signInError);
+            return null;
+          }
+
+          // Redirect to Google OAuth
+          window.location.href = url;
+          return null;
+        }
+
+        const refreshedTokens = {
+          access_token: session.provider_token,
+          refresh_token: session.provider_refresh_token || data.refresh_token,
+          expiry_date: Date.now() + (session.expires_in || 3600) * 1000
+        };
 
         // Update tokens in database
-        await updateGmailTokens({
-          access_token: refreshedTokens.access_token,
-          refresh_token: refreshedTokens.refresh_token,
-          expiry_date: refreshedTokens.expiry_date
-        });
+        await updateGmailTokens(refreshedTokens);
 
-        return {
-          access_token: refreshedTokens.access_token,
-          refresh_token: refreshedTokens.refresh_token,
-          expiry_date: refreshedTokens.expiry_date
-        };
+        return refreshedTokens;
       } catch (error) {
-        console.error('Error refreshing Gmail tokens:', error);
+        console.error('Error refreshing token:', error);
         return null;
       }
     }
