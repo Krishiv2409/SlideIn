@@ -11,12 +11,12 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error('OAuth error:', error)
-      return NextResponse.redirect(`${requestUrl.origin}/settings?error=${error}`)
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=${error}`)
     }
 
     if (!code) {
       console.error('No code provided')
-      return NextResponse.redirect(`${requestUrl.origin}/settings?error=no_code`)
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=no_code`)
     }
 
     const cookieStore = cookies() as unknown as RequestCookies
@@ -51,17 +51,17 @@ export async function GET(request: Request) {
 
     if (tokenError) {
       console.error('Token exchange error:', tokenError)
-      return NextResponse.redirect(`${requestUrl.origin}/settings?error=token_exchange_failed`)
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=token_exchange_failed`)
     }
 
     if (!session?.user) {
       console.error('No active session found after code exchange')
-      return NextResponse.redirect(`${requestUrl.origin}/settings?error=no_session`)
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=no_session`)
     }
 
     if (!session?.provider_token) {
       console.error('No provider token in session')
-      return NextResponse.redirect(`${requestUrl.origin}/settings?error=no_provider_token`)
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=no_provider_token`)
     }
 
     // Save tokens to database
@@ -77,10 +77,11 @@ export async function GET(request: Request) {
 
     if (saveError) {
       console.error('Error saving tokens:', saveError)
-      return NextResponse.redirect(`${requestUrl.origin}/settings?error=save_tokens_failed`)
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=save_tokens_failed`)
     }
 
-    return NextResponse.redirect(`${requestUrl.origin}/?success=true`)
+    // Redirect to email generator with success parameter
+    return NextResponse.redirect(`${requestUrl.origin}/email-generator?success=true`)
   } catch (error) {
     console.error('Callback error:', error)
     // Ensure requestUrl is defined for the redirect, fallback to '/' if not
@@ -89,6 +90,6 @@ export async function GET(request: Request) {
       const requestUrl = new URL(request.url);
       origin = requestUrl.origin;
     } catch {}
-    return NextResponse.redirect(`${origin}/settings?error=unknown`)
+    return NextResponse.redirect(`${origin}/sign-in?error=unknown`)
   }
 } 

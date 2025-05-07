@@ -16,14 +16,10 @@ export default function AuthLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <main className="min-h-screen flex items-center justify-center bg-gray-50">
-            {children}
-          </main>
-        </ThemeProvider>
-      </body>
-    </html>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+      <main className="min-h-screen flex items-center justify-center bg-gray-50">
+        {children}
+      </main>
+    </ThemeProvider>
   )
 } 

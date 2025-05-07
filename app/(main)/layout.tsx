@@ -20,17 +20,19 @@ export default function MainLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <SidebarProvider>
-            <div className="flex h-screen">
-              <AppSidebar />
-              <main className="flex-1 overflow-auto bg-gray-50">{children}</main>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+      <SidebarProvider>
+        <div className="flex h-screen">
+          <AppSidebar />
+          <main className="flex-1 overflow-auto pl-[16rem]">
+            <div className="flex justify-center items-center w-full h-screen px-2 md:px-8">
+              <div className="w-full max-w-4xl h-full flex items-center justify-center">
+                {children}
+              </div>
             </div>
-          </SidebarProvider>
-        </ThemeProvider>
-      </body>
-    </html>
+          </main>
+        </div>
+      </SidebarProvider>
+    </ThemeProvider>
   )
 } 

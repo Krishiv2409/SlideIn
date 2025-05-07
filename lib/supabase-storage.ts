@@ -94,8 +94,6 @@ export const getGmailTokens = async (): Promise<GmailTokens | null> => {
       .from('gmail_tokens')
       .select('*')
       .eq('user_id', session.user.id)
-      .order('updated_at', { ascending: false })
-      .limit(1)
       .single();
 
     console.log('Token retrieval result:', { data, error });
@@ -125,49 +123,22 @@ export const getGmailTokens = async (): Promise<GmailTokens | null> => {
     if (data.expiry_date < currentTime + 5 * 60 * 1000) {
       try {
         console.log('Attempting to refresh token via Supabase');
-        const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
         
         if (refreshError) {
           console.error('Error refreshing session:', refreshError);
           return null;
         }
 
-        if (!session?.provider_token) {
-          console.error('No provider token in refreshed session, attempting to re-authenticate');
-          // Try to get a new session with provider token
-          const { data: { url }, error: signInError } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-              queryParams: {
-                access_type: 'offline',
-                prompt: 'consent',
-                scope: [
-                  'email',
-                  'profile',
-                  'https://www.googleapis.com/auth/gmail.send',
-                  'https://www.googleapis.com/auth/gmail.compose',
-                  'https://www.googleapis.com/auth/gmail.modify'
-                ].join(' ')
-              },
-              skipBrowserRedirect: false,
-              redirectTo: `${window.location.origin}/settings`
-            }
-          });
-
-          if (signInError || !url) {
-            console.error('Failed to re-authenticate:', signInError);
-            return null;
-          }
-
-          // Redirect to Google OAuth
-          window.location.href = url;
+        if (!refreshedSession?.provider_token) {
+          console.log('No provider token in refreshed session, reconnection required');
           return null;
         }
 
         const refreshedTokens = {
-          access_token: session.provider_token,
-          refresh_token: session.provider_refresh_token || data.refresh_token,
-          expiry_date: Date.now() + (session.expires_in || 3600) * 1000
+          access_token: refreshedSession.provider_token,
+          refresh_token: refreshedSession.provider_refresh_token || data.refresh_token,
+          expiry_date: Date.now() + (refreshedSession.expires_in || 3600) * 1000
         };
 
         // Update tokens in database
@@ -275,37 +246,35 @@ export const removeGmailTokens = async (): Promise<void> => {
  */
 export const isGmailConnected = async (): Promise<boolean> => {
   try {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-    
-    // First check if we have a valid session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError || !session?.user) {
-      console.log('No valid session found');
-      return false;
-    }
-
-    // Check if we have stored tokens
     const tokens = await getGmailTokens();
     if (!tokens) {
-      console.log('No stored Gmail tokens found');
       return false;
     }
 
-    // Validate token data
-    if (!tokens.access_token || !tokens.refresh_token || !tokens.expiry_date) {
-      console.log('Invalid token data found');
-      return false;
-    }
-
-    // Check if token is expired (with 5 minutes buffer)
+    // Check if token is expired or about to expire (within 5 minutes)
     const currentTime = Date.now();
     if (tokens.expiry_date < currentTime + 5 * 60 * 1000) {
-      console.log('Gmail token is expired or about to expire');
-      return false;
+      // Try to refresh the token
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.provider_token) {
+        return false;
+      }
+
+      // Update tokens with new session data
+      const newTokens = {
+        access_token: session.provider_token,
+        refresh_token: session.provider_refresh_token || tokens.refresh_token,
+        expiry_date: Date.now() + (session.expires_in || 3600) * 1000
+      };
+
+      await updateGmailTokens(newTokens);
+      return true;
     }
 
     return true;

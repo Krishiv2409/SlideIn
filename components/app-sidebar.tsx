@@ -29,7 +29,7 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Email Generator">
-              <Link href="/">
+              <Link href="/email-generator">
                 <Mail className="h-4 w-4" />
                 <span>Email Generator</span>
               </Link>
