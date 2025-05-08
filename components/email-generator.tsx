@@ -444,10 +444,10 @@ export function EmailGenerator() {
   };
 
   return (
-    <div className="w-full h-full px-4 py-8">
-      <div className="w-full h-full flex items-center justify-center bg-white rounded-2xl p-4 md:p-8 min-h-[400px]">
+    <div className="w-full h-full flex flex-col justify-center items-center email-generator-container">
+      <div className="w-full max-w-5xl mx-auto h-full flex items-center justify-center bg-white rounded-2xl p-4 md:p-8 transition-all duration-300">
         {isLoadingAccounts ? (
-          <Card className="shadow-none border-none">
+          <Card className="shadow-none border-none w-full max-w-md mx-auto">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center justify-center gap-4 p-8">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -558,8 +558,8 @@ export function EmailGenerator() {
             </CardContent>
           </Card>
         ) : !generated ? (
-          <Card className="shadow-none border-none">
-            <CardContent className="pt-6 px-0">
+          <Card className="shadow-none border-none w-full max-w-2xl mx-auto">
+            <CardContent className="pt-6 px-4 sm:px-6">
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="url">Paste a URL (job post, professor page, etc.)</Label>
@@ -641,7 +641,7 @@ export function EmailGenerator() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="w-full grid gap-6 md:grid-cols-2 transition-all duration-300">
             <Card className="md:col-span-1 shadow-none border-none">
               <CardContent className="pt-6">
                 <div className="space-y-4">

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 import { EmailGenerator } from '@/components/email-generator';
+import { ContentWrapper } from '@/components/content-wrapper';
 
 export default function EmailGeneratorPage() {
   const router = useRouter();
@@ -63,8 +64,8 @@ export default function EmailGeneratorPage() {
   }
 
   return (
-    <div className="w-full h-full">
+    <ContentWrapper className="h-full">
       <EmailGenerator />
-    </div>
+    </ContentWrapper>
   );
 }

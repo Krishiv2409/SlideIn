@@ -34,6 +34,14 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Sidebar width variables */
+    --sidebar-width: 16rem;
+    --sidebar-width-collapsed: 3rem; 
+    --sidebar-width-icon: 3rem;
+    
+    /* Content max-width variables for centering */
+    --content-max-width: 1200px;
   }
 
   .dark {
@@ -78,8 +86,423 @@
   }
 }
 
+/* Sidebar states */
+body[data-sidebar-state="collapsed"] main {
+  margin-left: var(--sidebar-width-collapsed);
+}
+
+body[data-sidebar-state="expanded"] main {
+  margin-left: var(--sidebar-width);
+}
+
+/* For smooth transitions */
+main {
+  transition: margin-left 0.3s ease;
+}
+
+/* Center icons in collapsed sidebar */
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] [data-sidebar="menu"] {
+  align-items: center;
+}
+
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] [data-sidebar="menu-button"] svg {
+  margin: 0 auto;
+}
+
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] [data-sidebar="menu-button"] span {
+  display: none;
+}
+
+/* Override sidebar width */
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] {
+  width: var(--sidebar-width-collapsed) !important;
+}
+
+body[data-sidebar-state="collapsed"] [data-sidebar="menu-button"] {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Adjust for the sidebar state in the content area */
+[data-sidebar-state="collapsed"] .content-area {
+  margin-left: var(--sidebar-width-collapsed);
+  width: calc(100vw - var(--sidebar-width-collapsed));
+  transition: all 0.3s ease;
+}
+
+[data-sidebar-state="expanded"] .content-area {
+  margin-left: var(--sidebar-width);
+  width: calc(100vw - var(--sidebar-width));
+  transition: all 0.3s ease;
+}
+
+/* Email generator specific adjustments when sidebar is collapsed */
+[data-sidebar-state="collapsed"] .email-generator-container {
+  margin-left: 0;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  position: relative;
+  transform: translateX(calc((var(--sidebar-width) - var(--sidebar-width-collapsed)) / -4)); /* Move more to the left */
+  transition: all 0.3s ease;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+
+    /* Sidebar variables */
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Sidebar width variables */
+    --sidebar-width: 16rem;
+    --sidebar-width-collapsed: 3rem; 
+    --sidebar-width-icon: 3rem;
+    
+    /* Content max-width variables for centering */
+    --content-max-width: 1200px;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    /* Sidebar variables */
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 0 0% 98%;
+    --sidebar-primary-foreground: 240 5.9% 10%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Sidebar states */
+body[data-sidebar-state="collapsed"] main {
+  margin-left: var(--sidebar-width-collapsed);
+}
+
+body[data-sidebar-state="expanded"] main {
+  margin-left: var(--sidebar-width);
+}
+
+/* For smooth transitions */
+main {
+  transition: margin-left 0.3s ease;
+}
+
+/* Center icons in collapsed sidebar */
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] [data-sidebar="menu"] {
+  align-items: center;
+}
+
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] [data-sidebar="menu-button"] svg {
+  margin: 0 auto;
+}
+
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] [data-sidebar="menu-button"] span {
+  display: none;
+}
+
+/* Override sidebar width */
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] {
+  width: var(--sidebar-width-collapsed) !important;
+}
+
+body[data-sidebar-state="collapsed"] [data-sidebar="menu-button"] {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Adjust for the sidebar state in the content area */
+[data-sidebar-state="collapsed"] .content-area {
+  margin-left: var(--sidebar-width-collapsed);
+  width: calc(100vw - var(--sidebar-width-collapsed));
+  transition: all 0.3s ease;
+}
+
+[data-sidebar-state="expanded"] .content-area {
+  margin-left: var(--sidebar-width);
+  width: calc(100vw - var(--sidebar-width));
+  transition: all 0.3s ease;
+}
+
+/* Email generator specific adjustments when sidebar is collapsed */
+[data-sidebar-state="collapsed"] .email-generator-container {
+  margin-left: 0;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  position: relative;
+  transform: translateX(calc((var(--sidebar-width) - var(--sidebar-width-collapsed)) / -4)); /* Move more to the left */
+  transition: all 0.3s ease;
+}
+
+[data-sidebar-state="expanded"] .email-generator-container {
+  margin-left: 0;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  transform: translateX(0);
+  transition: all 0.3s ease;
+}
+
+/* Inbox tracker container with dynamic centering */
+[data-sidebar-state="collapsed"] .inbox-tracker-container {
+  margin-left: 0;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  position: relative;
+  transform: translateX(calc((var(--sidebar-width) - var(--sidebar-width-collapsed)) / -4)); /* Move more to the left */
+  transition: all 0.3s ease;
+}
+
+[data-sidebar-state="expanded"] .inbox-tracker-container {
+  margin-left: 0;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  transform: translateX(0);
+  transition: all 0.3s ease;
+}
+
+/* Inbox tracker specific adjustments */
+.inbox-tracker-container {
+  padding: 2rem;
+  transition: all 0.3s ease;
+  width: 100%;
+  overflow-x: auto; /* Add horizontal scrolling only when needed */
+}
+
+.inbox-tracker-container table {
+  width: 100%;
+  min-width: 1000px;
+  max-width: 1200px;
+  margin: 0 auto;
+  transition: all 0.3s ease;
+  table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Ensure all columns get enough space */
+.inbox-tracker-container table th,
+.inbox-tracker-container table td {
+  min-width: 100px; /* Default minimum width */
+  white-space: normal;
+  padding: 0.75rem;
+}
+
+/* Improved column widths for different content types */
+/* Email address (To) column */
+.inbox-tracker-container table th:first-child,
+.inbox-tracker-container table td:first-child {
+  min-width: 180px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Subject column - give it more space */
+.inbox-tracker-container table th:nth-child(2),
+.inbox-tracker-container table td:nth-child(2) {
+  min-width: 280px;
+  max-width: 350px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status column - needs less space */
+.inbox-tracker-container table th:nth-child(3),
+.inbox-tracker-container table td:nth-child(3) {
+  min-width: 120px;
+  max-width: 130px;
+  white-space: nowrap; /* Prevent wrapping of status icons/text */
+}
+
+/* Opens column - very small, just for numbers */
+.inbox-tracker-container table th:nth-child(4),
+.inbox-tracker-container table td:nth-child(4) {
+  min-width: 70px;
+  max-width: 80px;
+  text-align: center;
+}
+
+/* Reply column - for status indicators */
+.inbox-tracker-container table th:nth-child(5),
+.inbox-tracker-container table td:nth-child(5) {
+  min-width: 110px;
+  max-width: 120px;
+  white-space: nowrap; /* Prevent emoji wrapping */
+}
+
+/* Sent/Date column - compact for dates */
+.inbox-tracker-container table th:nth-child(6),
+.inbox-tracker-container table td:nth-child(6) {
+  min-width: 120px;
+  max-width: 130px;
+}
+
+/* Actions column - for the three dots menu */
+.inbox-tracker-container table th:last-child,
+.inbox-tracker-container table td:last-child {
+  min-width: 60px;
+  max-width: 70px;
+  text-align: center;
+}
+
+/* Ensure consistent table width in both states */
+[data-sidebar-state="expanded"] .inbox-tracker-container table,
+[data-sidebar-state="collapsed"] .inbox-tracker-container table {
+  width: 100% !important;
+  min-width: 1000px !important;
+  font-size: 0.875rem; /* Use the same font size in both states */
+}
+
+/* Ensure consistent padding in both states */
+[data-sidebar-state="expanded"] .inbox-tracker-container th,
+[data-sidebar-state="expanded"] .inbox-tracker-container td,
+[data-sidebar-state="collapsed"] .inbox-tracker-container th,
+[data-sidebar-state="collapsed"] .inbox-tracker-container td {
+  padding: 0.75rem !important;
+  vertical-align: middle; /* Center content vertically */
+}
+
+/* Ensure icons and emojis display properly */
+.inbox-tracker-container td img,
+.inbox-tracker-container td svg,
+.inbox-tracker-container td span {
+  display: inline-flex;
+  vertical-align: middle;
+}
+/* Adjust centering for the email generator container */
+.email-generator-container {
+  padding: 2rem;
+  transition: all 0.3s ease;
+}
+
+div[data-sidebar-state="collapsed"] .email-generator-container .card,
+div[data-sidebar-state="collapsed"] .email-generator-container .tabs-list,
+div[data-sidebar-state="collapsed"] .email-generator-container .tabs-content {
+  transition: all 0.3s ease;
+}
+
+div[data-sidebar-state="collapsed"] .email-generator-container input,
+div[data-sidebar-state="collapsed"] .email-generator-container textarea,
+div[data-sidebar-state="collapsed"] .email-generator-container select {
+  width: 100%;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+  div[data-sidebar-state="collapsed"] .email-generator-container .form-layout,
+  div[data-sidebar-state="expanded"] .email-generator-container .form-layout {
+    flex-direction: column;
+  }
+  
+  div[data-sidebar-state="collapsed"] .email-generator-container .form-layout > div,
+  div[data-sidebar-state="expanded"] .email-generator-container .form-layout > div {
+    width: 100%;
+  }
+
+  /* Reset centering on small screens */
+  [data-sidebar-state="collapsed"] .email-generator-container,
+  [data-sidebar-state="collapsed"] .inbox-tracker-container {
+    transform: translateX(0);
+  }
+}
+
 @media (min-width: 1536px) {
   html {
     font-size: calc(16px + 0.2vw);
   }
 }
+/* Prevent table compression in both states */
+[data-sidebar-state="expanded"] .inbox-tracker-container table,
+[data-sidebar-state="collapsed"] .inbox-tracker-container table {
+  width: 100% !important;
+  min-width: 1000px !important;
+  font-size: 0.875rem; /* Use the same font size in both states */
+}
+
+/* Add specific positioning for collapsed state */
+[data-sidebar-state="collapsed"] .inbox-tracker-container table {
+  margin-left: 0;
+}
+
+
