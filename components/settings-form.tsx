@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -8,8 +9,287 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { createBrowserClient } from "@supabase/ssr"
+import { toast } from "sonner"
+import { Loader2, Mail, X, Plus } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
+
+interface EmailAccount {
+  id: string
+  email: string
+  provider: 'gmail' | 'outlook'
+  isConnected: boolean
+  displayName?: string
+  isDefault?: boolean
+}
+
+interface GmailTokens {
+  access_token: string
+  refresh_token: string
+  expiry_date: number
+}
+
+interface StoredGmailAccount {
+  email: string
+  tokens: GmailTokens
+  displayName?: string
+}
 
 export function SettingsForm() {
+  const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+  const router = useRouter()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return;
+
+    const checkAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error('Session error:', error)
+          throw error
+        }
+
+        if (session) {
+          setIsAuthenticated(true)
+          loadEmailAccounts(session.user.id)
+        } else {
+          console.log('No session found')
+          router.push('/sign-in')
+        }
+      } catch (error) {
+        console.error('Auth error:', error)
+        router.push('/sign-in')
+      }
+    }
+
+    checkAuth()
+
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        setIsAuthenticated(true)
+        loadEmailAccounts(session.user.id)
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false)
+        setEmailAccounts([])
+        router.push('/sign-in')
+      }
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [mounted, supabase, router])
+
+  const loadEmailAccounts = async (userId: string) => {
+    if (!supabase) {
+      console.error('Supabase client not initialized');
+      setIsLoading(false);
+      return;
+    }
+    
+    try {
+      console.log('Loading email accounts for userId:', userId);
+      // Get accounts from Supabase for this user
+      const { data: accounts, error } = await supabase
+        .from('email_accounts')
+        .select('*')
+        .eq('user_id', userId)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: true });
+
+      console.log('Supabase accounts result:', accounts);
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(`Database error: ${error.message}`);
+      }
+
+      if (!accounts || accounts.length === 0) {
+        console.log('No accounts found for userId:', userId);
+        setEmailAccounts([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Only use Supabase data for the account list
+      const formattedAccounts = accounts.map(acc => ({
+        id: acc.id,
+        email: acc.email,
+        provider: acc.provider as 'gmail' | 'outlook',
+        isConnected: true,
+        displayName: acc.display_name,
+        isDefault: acc.is_default
+      }));
+      console.log('Formatted accounts for display:', formattedAccounts);
+      setEmailAccounts(formattedAccounts);
+    } catch (error) {
+      console.error('Error loading email accounts:', error instanceof Error ? error.message : 'Unknown error');
+      toast.error('Failed to load email accounts. Please try refreshing the page.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConnectGmail = async () => {
+    if (!supabase) {
+      toast.error('Database connection not available');
+      return;
+    }
+    setIsConnecting(true);
+    
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        toast.error('Authentication error. Please try signing in again.');
+        setIsConnecting(false);
+        return;
+      }
+
+      // If we have a session, proceed with Gmail connection
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+            scope: [
+              'email',
+              'profile',
+              'https://www.googleapis.com/auth/gmail.send',
+              'https://www.googleapis.com/auth/gmail.compose',
+              'https://www.googleapis.com/auth/gmail.modify'
+            ].join(' ')
+          },
+          skipBrowserRedirect: false,
+          redirectTo: `${window.location.origin}/api/gmail-auth/callback`
+        }
+      });
+
+      if (error) {
+        console.error('Gmail OAuth error:', error);
+        toast.error(`Failed to connect Gmail: ${error.message}`);
+        setIsConnecting(false);
+        return;
+      }
+
+      // The actual account addition will happen in the callback
+    } catch (error) {
+      console.error('Error during Gmail connect:', error);
+      toast.error('Failed to connect Gmail. Please try again.');
+      setIsConnecting(false);
+    }
+  };
+
+  const handleRemoveAccount = async (accountId: string) => {
+    if (!supabase) {
+      toast.error('Database connection not available');
+      return;
+    }
+
+    try {
+      if (accountId.startsWith('gmail-')) {
+        const email = accountId.replace('gmail-', '');
+        
+        // Remove from Supabase
+        const { error } = await supabase
+          .from('email_accounts')
+          .delete()
+          .match({ email });
+        
+        if (error) throw error;
+        
+        // Update state
+        setEmailAccounts(accounts => {
+          const remainingAccounts = accounts.filter(acc => acc.id !== accountId);
+          
+          // If we removed the default account and have other accounts, set a new default
+          if (remainingAccounts.length > 0 && !remainingAccounts.some(acc => acc.isDefault)) {
+            // Update default in Supabase
+            supabase
+              .from('email_accounts')
+              .update({ is_default: true })
+              .match({ email: remainingAccounts[0].email });
+            
+            return remainingAccounts.map((acc, index) => ({
+              ...acc,
+              isDefault: index === 0
+            }));
+          }
+          
+          return remainingAccounts;
+        });
+        
+        toast.success('Gmail account removed successfully');
+      }
+      // Add Outlook removal logic here when implemented
+    } catch (error) {
+      console.error('Error removing account:', error);
+      toast.error('Failed to remove account');
+    }
+  };
+
+  const handleSetDefault = async (accountId: string) => {
+    if (!supabase) {
+      toast.error('Database connection not available');
+      return;
+    }
+
+    try {
+      const email = accountId.split('-')[1];
+      
+      // Update in Supabase
+      const { error } = await supabase
+        .from('email_accounts')
+        .update({ is_default: false })
+        .neq('email', email);
+      
+      if (error) throw error;
+      
+      const { error: setDefaultError } = await supabase
+        .from('email_accounts')
+        .update({ is_default: true })
+        .match({ email });
+      
+      if (setDefaultError) throw setDefaultError;
+      
+      // Update state
+      setEmailAccounts(accounts => accounts.map(acc => ({
+        ...acc,
+        isDefault: acc.id === accountId
+      })));
+      
+      toast.success('Default email account updated');
+    } catch (error) {
+      console.error('Error setting default account:', error);
+      toast.error('Failed to update default account');
+    }
+  };
+
+  if (!mounted || !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <Tabs defaultValue="account" className="space-y-6">
       <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
@@ -25,57 +305,87 @@ export function SettingsForm() {
             <CardDescription>Connect your email accounts to send emails from SlideIn</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-md border p-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-pink-100 flex items-center justify-center">
-                      <span className="text-pink-500 text-sm font-medium">G</span>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : emailAccounts.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No email accounts connected
+              </div>
+            ) : (
+              emailAccounts.map((account) => (
+                <div key={account.id} className="rounded-md border p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "h-8 w-8 rounded-full flex items-center justify-center",
+                          account.provider === 'gmail' ? "bg-pink-100" : "bg-blue-100"
+                        )}>
+                          <span className={cn(
+                            "text-sm font-medium",
+                            account.provider === 'gmail' ? "text-pink-500" : "text-blue-500"
+                          )}>
+                            {account.provider === 'gmail' ? 'G' : 'O'}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{account.email}</p>
+                            {account.isDefault && (
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground capitalize">{account.provider}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">personal@example.com</p>
-                      <p className="text-sm text-muted-foreground">Gmail</p>
+                    <div className="flex items-center gap-2">
+                      {!account.isDefault && (
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleSetDefault(account.id)}
+                        >
+                          Set as Default
+                        </Button>
+                      )}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="text-destructive"
+                        onClick={() => handleRemoveAccount(account.id)}
+                      >
+                        Remove
+                      </Button>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">
-                    Edit
-                  </Button>
-                  <Button variant="outline" size="sm" className="text-destructive">
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            </div>
+              ))
+            )}
 
-            <div className="rounded-md border p-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                      <span className="text-blue-500 text-sm font-medium">O</span>
-                    </div>
-                    <div>
-                      <p className="font-medium">work@company.com</p>
-                      <p className="text-sm text-muted-foreground">Outlook</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">
-                    Edit
-                  </Button>
-                  <Button variant="outline" size="sm" className="text-destructive">
-                    Remove
-                  </Button>
-                </div>
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Button
+                className="w-full"
+                variant="outline"
+                onClick={() => { window.location.href = '/api/gmail-oauth/start'; }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Connect Gmail
+              </Button>
+              <Button 
+                className="w-full" 
+                variant="outline"
+                disabled
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Connect Outlook
+                <span className="ml-2 text-xs text-muted-foreground">(Coming soon)</span>
+              </Button>
             </div>
-
-            <Button className="w-full" variant="outline">
-              + Add Email Account
-            </Button>
           </CardContent>
         </Card>
 

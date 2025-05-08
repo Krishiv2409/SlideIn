@@ -17,10 +17,14 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
+          // Ensure cookies are set with proper options
           response.cookies.set({
             name,
             value,
             ...options,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+            path: '/',
           });
         },
         remove(name: string, options: CookieOptions) {
@@ -28,6 +32,10 @@ export async function middleware(request: NextRequest) {
             name,
             value: '',
             ...options,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+            path: '/',
+            maxAge: 0,
           });
         },
       },
@@ -44,8 +52,11 @@ export async function middleware(request: NextRequest) {
       path: request.nextUrl.pathname 
     });
 
-    // If accessing a protected route and no session exists, redirect to sign-in
-    const isProtectedRoute = request.nextUrl.pathname.startsWith('/email-generator');
+    // Define protected routes
+    const isProtectedRoute = 
+      request.nextUrl.pathname.startsWith('/email-generator') ||
+      request.nextUrl.pathname.startsWith('/settings');
+
     if (isProtectedRoute) {
       if (!session) {
         console.log('No session found, redirecting to sign-in');

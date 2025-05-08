@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Loader2, Send, Sparkles, Mail, Check, X } from "lucide-react"
+import { Loader2, Send, Sparkles, Mail, Check, X, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -48,6 +48,15 @@ const goals = [
   { value: "other", label: "Other" },
 ]
 
+interface EmailAccount {
+  id: string;
+  email: string;
+  provider: 'gmail' | 'outlook';
+  isConnected: boolean;
+  displayName?: string;
+  isDefault: boolean;
+}
+
 export function EmailGenerator() {
   const [url, setUrl] = useState("")
   const [userName, setUserName] = useState("")
@@ -68,96 +77,206 @@ export function EmailGenerator() {
   const [isSending, setIsSending] = useState(false)
   const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [isGmailConnecting, setIsGmailConnecting] = useState(false)
-  const supabase = typeof window !== 'undefined' ? createBrowserClient(
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([])
+  const [selectedAccount, setSelectedAccount] = useState<string>('')
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true)
+  const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  ) : null;
+  )
+  
+  // New code - Add useSearchParams to detect when returning from OAuth flow
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const successParam = searchParams.get('success');
 
-  useEffect(() => {
-    const checkGmailConnection = async () => {
-      if (!supabase) {
-        console.error('Supabase client not initialized');
-        setIsCheckingAuth(false);
+  // Function to load email accounts - extracted for reusability
+  const loadEmailAccounts = async () => {
+    if (!supabase) {
+      console.error('DEBUG: Supabase client not initialized');
+      setIsLoadingAccounts(false);
+      setIsGmailReady(false);
+      return;
+    }
+    
+    console.log('DEBUG: Loading email accounts...');
+    try {
+      // Get current session with more detailed error handling
+      let sessionResult;
+      try {
+        sessionResult = await supabase.auth.getSession();
+        console.log('DEBUG: Session fetch result:', 
+          sessionResult.data?.session ? 'Session exists' : 'No session',
+          'Error:', sessionResult.error ? sessionResult.error.message : 'None'
+        );
+      } catch (sessionError) {
+        console.error('DEBUG: Exception fetching session:', sessionError);
+        throw sessionError;
+      }
+
+      const { data: { session }, error: sessionError } = sessionResult;
+      
+      if (sessionError) {
+        console.error('DEBUG: Session error', sessionError);
+        throw sessionError;
+      }
+      
+      if (!session?.user?.id) {
+        console.log('DEBUG: No active session or user ID');
+        setEmailAccounts([]);
+        setIsLoadingAccounts(false);
+        setIsGmailReady(false);
         return;
       }
       
-      try {
-        // First check if we have a session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Session error:', sessionError.message);
-          setIsCheckingAuth(false);
-          return;
-        }
+      console.log('DEBUG: Session found, user ID:', session.user.id);
+      // Get accounts from Supabase for this user
+      const { data: accounts, error } = await supabase
+        .from('email_accounts')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: true });
 
-        if (session?.user) {
-          // Get user's name from their profile
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
-          if (userError) {
-            console.error('User profile error:', userError.message);
-          } else if (user?.user_metadata?.full_name) {
-            setUserName(user.user_metadata.full_name);
-          }
-        }
-
-        if (session?.provider_token) {
-          try {
-            // Save the tokens to our storage
-            await updateGmailTokens({
-              access_token: session.provider_token,
-              refresh_token: session.provider_refresh_token || '',
-              expiry_date: Date.now() + (session.expires_in || 3600) * 1000
-            });
-            setIsGmailReady(true);
-          } catch (tokenError) {
-            console.error('Error updating Gmail tokens:', tokenError instanceof Error ? tokenError.message : 'Unknown error');
-          }
-        } else {
-          // Try to get tokens from our storage
-          try {
-            const tokens = await getGmailTokens();
-            if (tokens) {
-              setIsGmailReady(true);
-            }
-          } catch (tokenError) {
-            console.error('Error getting Gmail tokens:', tokenError instanceof Error ? tokenError.message : 'Unknown error');
-          }
-        }
-      } catch (error) {
-        console.error('Error checking Gmail connection:', error instanceof Error ? error.message : 'Unknown error');
-      } finally {
-        setIsCheckingAuth(false);
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(`Database error: ${error.message}`);
       }
+
+      if (!accounts || accounts.length === 0) {
+        console.log('DEBUG: No email accounts found');
+        setEmailAccounts([]);
+        setIsLoadingAccounts(false);
+        setIsGmailReady(false);
+        return;
+      }
+
+      // Only use Supabase data for the account list
+      const formattedAccounts = accounts.map(acc => ({
+        id: acc.id,
+        email: acc.email,
+        provider: acc.provider as 'gmail' | 'outlook',
+        isConnected: !!(acc.access_token && acc.refresh_token && acc.refresh_token !== 'EMPTY' && acc.refresh_token !== ''),
+        displayName: acc.display_name,
+        isDefault: acc.is_default
+      }));
+      console.log('DEBUG: Raw accounts from DB:', accounts);
+      console.log('DEBUG: Formatted accounts:', formattedAccounts);
+      // Only set isGmailReady to true if there is at least one Gmail account with valid tokens
+      const hasValidGmail = formattedAccounts.some(
+        acc => acc.provider === 'gmail' && acc.isConnected
+      );
+      console.log('DEBUG: Has valid Gmail:', hasValidGmail);
+      setEmailAccounts(formattedAccounts);
+      setIsGmailReady(hasValidGmail);
+      // Set default account
+      const defaultAccount = formattedAccounts.find(acc => acc.isDefault);
+      if (defaultAccount) {
+        setSelectedAccount(defaultAccount.id);
+      }
+    } catch (error) {
+      console.error('Error loading email accounts:', error instanceof Error ? error.message : 'Unknown error');
+      toast.error('Failed to load email accounts. Please try refreshing the page.');
+      setIsGmailReady(false);
+    } finally {
+      setIsLoadingAccounts(false);
+    }
+  };
+
+  // Initial load with session recovery attempt
+  useEffect(() => {
+    const initializeWithSessionRecovery = async () => {
+      console.log('DEBUG: Initializing component with session recovery');
+      // Try to refresh the session first
+      try {
+        await refreshSession();
+      } catch (error) {
+        console.error('DEBUG: Error during initial session refresh:', error);
+      }
+      // Load accounts regardless of session refresh outcome
+      await loadEmailAccounts();
     };
     
-    checkGmailConnection();
+    initializeWithSessionRecovery();
+  }, []);
 
-    if (!supabase) return;
+  // Added new effect to handle successful Gmail connection
+  useEffect(() => {
+    if (successParam === 'gmail_connected') {
+      console.log('DEBUG: Detected successful Gmail connection, reloading accounts');
+      // Clear the URL parameter without page refresh
+      if (typeof window !== 'undefined') {
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+      }
+      // Reload email accounts after successful connection
+      loadEmailAccounts();
+      toast.success('Gmail connected successfully!');
+    }
+  }, [successParam]);
 
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session?.provider_token) {
-        // Update user name when signed in
-        if (session.user?.user_metadata?.full_name) {
-          setUserName(session.user.user_metadata.full_name);
-        }
-        
-        updateGmailTokens({
-          access_token: session.provider_token,
-          refresh_token: session.provider_refresh_token || '',
-          expiry_date: Date.now() + (session.expires_in || 3600) * 1000
-        }).then(() => setIsGmailReady(true));
-      } else if (event === 'SIGNED_OUT') {
-        setIsGmailReady(false);
-        setUserName("");
+  // Set up auth state change listener
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        console.log('DEBUG: Auth state changed to SIGNED_IN, reloading accounts');
+        loadEmailAccounts();
       }
     });
 
     return () => {
-      subscription.unsubscribe();
+      data.subscription.unsubscribe();
     };
-  }, []);
+  }, [supabase]);
+
+  // Added debug button function to manually refresh accounts
+  const handleDebugRefresh = async () => {
+    console.log('DEBUG: Manual refresh triggered');
+    setIsLoadingAccounts(true);
+    await loadEmailAccounts();
+    toast.success('Email accounts refreshed');
+  };
+
+  // Add function to attempt session recovery
+  const refreshSession = async () => {
+    try {
+      console.log('DEBUG: Attempting session recovery...');
+      const { data, error } = await supabase.auth.refreshSession();
+      
+      console.log('DEBUG: Session refresh result:', 
+        data.session ? 'Session refreshed' : 'No session after refresh',
+        'Error:', error ? error.message : 'None'
+      );
+      
+      if (error) {
+        console.error('DEBUG: Session refresh error', error);
+        return false;
+      }
+      
+      if (data.session) {
+        console.log('DEBUG: Session successfully refreshed');
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('DEBUG: Exception during session refresh:', error);
+      return false;
+    }
+  };
+
+  // Enhanced debug button with session refresh
+  const handleDebugSessionRefresh = async () => {
+    console.log('DEBUG: Manual session refresh triggered');
+    const success = await refreshSession();
+    if (success) {
+      setIsLoadingAccounts(true);
+      await loadEmailAccounts();
+      toast.success('Session refreshed and accounts reloaded');
+    } else {
+      toast.error('Session refresh failed');
+    }
+  };
 
   // Sender email options
   const senderOptions = [
@@ -281,59 +400,19 @@ export function EmailGenerator() {
     }
   }
 
-  const handleGmailConnect = async () => {
-    if (!supabase) return;
-    setIsGmailConnecting(true);
-    try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        console.error('Session error during Gmail connect:', sessionError);
-        setIsGmailConnecting(false);
-        return;
-      }
-
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-            scope: [
-              'email',
-              'profile',
-              'https://www.googleapis.com/auth/gmail.send',
-              'https://www.googleapis.com/auth/gmail.compose',
-              'https://www.googleapis.com/auth/gmail.modify'
-            ].join(' ')
-          },
-          skipBrowserRedirect: false,
-          redirectTo: `${window.location.origin}/api/gmail-auth/callback`
-        }
-      });
-
-      if (error) {
-        console.error('Gmail OAuth error:', error);
-        toast.error(`Failed to connect Gmail: ${error.message}`);
-        setIsGmailConnecting(false);
-        return;
-      }
-      // Success will be handled by auth state change
-    } catch (error) {
-      console.error('Error during Gmail connect:', error);
-      toast.error('Failed to connect Gmail. Please try again.');
-      setIsGmailConnecting(false);
-    }
+  const handleGmailConnect = () => {
+    window.location.href = '/api/gmail-oauth/start';
   };
 
   return (
     <div className="w-full h-full px-4 py-8">
       <div className="w-full h-full flex items-center justify-center bg-white rounded-2xl p-4 md:p-8 min-h-[400px]">
-        {isCheckingAuth ? (
+        {isLoadingAccounts ? (
           <Card className="shadow-none border-none">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center justify-center gap-4 p-8">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Checking authentication...</p>
+                <p className="text-sm text-muted-foreground">Loading email accounts...</p>
               </div>
             </CardContent>
           </Card>
@@ -407,6 +486,21 @@ export function EmailGenerator() {
                       <path fill="#50D9FF" d="M1362.667,255.5h383.25v383.25h-383.25V255.5z"/>
                     </svg>
                     <span>Connect with Outlook</span>
+                  </button>
+                </div>
+                {/* Debug buttons for troubleshooting */}
+                <div className="flex flex-col items-center mt-4 gap-2">
+                  <button 
+                    onClick={handleDebugRefresh}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    Refresh accounts
+                  </button>
+                  <button 
+                    onClick={handleDebugSessionRefresh}
+                    className="text-xs text-gray-400 hover:text-gray-600"
+                  >
+                    Refresh session
                   </button>
                 </div>
               </div>
@@ -557,14 +651,34 @@ export function EmailGenerator() {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="sender">Send from</Label>
-                      <Select value={senderEmail} onValueChange={setSenderEmail}>
-                        <SelectTrigger id="sender">
-                          <SelectValue placeholder="Select email account" />
+                      <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                        <SelectTrigger className="w-[300px]">
+                          <SelectValue placeholder="Select sender account" />
                         </SelectTrigger>
                         <SelectContent>
-                          {senderOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
+                          {emailAccounts.map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              <div className="flex items-center gap-2">
+                                {account.provider === 'gmail' ? (
+                                  <svg className="h-4 w-4" viewBox="0 0 24 24">
+                                    <path
+                                      fill="currentColor"
+                                      d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"
+                                    />
+                                  </svg>
+                                ) : (
+                                  <svg className="h-4 w-4" viewBox="0 0 24 24">
+                                    <path
+                                      fill="currentColor"
+                                      d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"
+                                    />
+                                  </svg>
+                                )}
+                                <span>{account.displayName || account.email}</span>
+                                {account.isDefault && (
+                                  <span className="text-xs text-muted-foreground">(Default)</span>
+                                )}
+                              </div>
                             </SelectItem>
                           ))}
                         </SelectContent>

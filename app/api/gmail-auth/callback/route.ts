@@ -3,23 +3,27 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { RequestCookies } from 'next/dist/server/web/spec-extension/cookies'
 
-export async function GET(request: Request) {
-  try {
-    const requestUrl = new URL(request.url)
-    const code = requestUrl.searchParams.get('code')
-    const error = requestUrl.searchParams.get('error')
+interface StoredGmailAccount {
+  email: string
+  tokens: {
+    access_token: string
+    refresh_token: string
+    expiry_date: number
+  }
+  displayName?: string
+}
 
-    if (error) {
-      console.error('OAuth error:', error)
-      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=${error}`)
-    }
+export async function GET(request: Request) {
+  const requestUrl = new URL(request.url)
+  try {
+    const code = requestUrl.searchParams.get('code')
 
     if (!code) {
       console.error('No code provided')
       return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=no_code`)
     }
 
-    const cookieStore = cookies() as unknown as RequestCookies
+    const cookieStore = await cookies()
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -37,7 +41,7 @@ export async function GET(request: Request) {
           },
           remove(name: string, options: any) {
             try {
-              cookieStore.set({ name, value: '', ...options })
+              cookieStore.set({ name, value: '', ...options, maxAge: 0 })
             } catch (error) {
               console.error('Error removing cookie:', error)
             }
@@ -46,17 +50,12 @@ export async function GET(request: Request) {
       }
     )
 
-    // Exchange the code for tokens/session FIRST
-    const { data: { session }, error: tokenError } = await supabase.auth.exchangeCodeForSession(code)
+    // Exchange the code for a session
+    const { data: { session }, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (tokenError) {
-      console.error('Token exchange error:', tokenError)
-      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=token_exchange_failed`)
-    }
-
-    if (!session?.user) {
-      console.error('No active session found after code exchange')
-      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=no_session`)
+    if (sessionError) {
+      console.error('Session error:', sessionError)
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=session_error`)
     }
 
     if (!session?.provider_token) {
@@ -64,32 +63,89 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=no_provider_token`)
     }
 
-    // Save tokens to database
-    const { error: saveError } = await supabase
-      .from('gmail_tokens')
-      .upsert({
-        user_id: session.user.id,
-        access_token: session.provider_token,
-        refresh_token: session.provider_refresh_token,
-        expiry_date: Date.now() + (session.expires_in || 3600) * 1000,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' })
-
-    if (saveError) {
-      console.error('Error saving tokens:', saveError)
-      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=save_tokens_failed`)
+    // Get user's email and name
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.email) {
+      console.error('No user email found')
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=no_user_email`)
     }
 
-    // Redirect to email generator with success parameter
-    return NextResponse.redirect(`${requestUrl.origin}/email-generator?success=true`)
+    // Check if this is the first account for this user
+    const { data: existingAccounts, error: countError } = await supabase
+      .from('email_accounts')
+      .select('id')
+      .eq('user_id', user.id);
+
+    if (countError) {
+      console.error('Error checking existing accounts:', countError);
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=check_accounts_failed`);
+    }
+
+    // Always insert a new row for every Gmail connection
+    const { error: saveError } = await supabase
+      .from('email_accounts')
+      .insert({
+        user_id: user.id,
+        email: user.email,
+        provider: 'gmail',
+        access_token: session.provider_token,
+        refresh_token: session.provider_refresh_token || '',
+        expiry_date: Date.now() + (session.expires_in || 3600) * 1000,
+        display_name: user.user_metadata?.full_name || user.email,
+        is_default: !existingAccounts || existingAccounts.length === 0, // Set as default if it's the first account
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+
+    if (saveError) {
+      console.error('Error saving account:', saveError);
+      return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=save_account_failed&details=${encodeURIComponent(saveError.message)}`);
+    }
+
+    // Create a script to update localStorage with the new account
+    const script = `
+      <script>
+        try {
+          // Get existing accounts
+          const storedAccounts = localStorage.getItem('gmailAccounts');
+          const gmailAccounts = storedAccounts ? JSON.parse(storedAccounts) : [];
+          
+          // Add new account
+          const newAccount = {
+            email: "${user.email}",
+            tokens: {
+              access_token: "${session.provider_token}",
+              refresh_token: "${session.provider_refresh_token || ''}",
+              expiry_date: ${Date.now() + (session.expires_in || 3600) * 1000}
+            },
+            displayName: "${user.user_metadata?.full_name || user.email}"
+          };
+          
+          gmailAccounts.push(newAccount);
+          
+          // Save updated accounts
+          localStorage.setItem('gmailAccounts', JSON.stringify(gmailAccounts));
+          
+          // Redirect to settings page
+          window.location.href = "${requestUrl.origin}/settings?success=true";
+        } catch (error) {
+          console.error('Error updating localStorage:', error);
+          window.location.href = "${requestUrl.origin}/settings?error=storage_update_failed";
+        }
+      </script>
+    `;
+
+    // Return HTML with the script
+    return new NextResponse(
+      `<!DOCTYPE html><html><head><title>Connecting Gmail...</title></head><body>${script}</body></html>`,
+      {
+        headers: {
+          'Content-Type': 'text/html',
+        },
+      }
+    );
   } catch (error) {
-    console.error('Callback error:', error)
-    // Ensure requestUrl is defined for the redirect, fallback to '/' if not
-    let origin = '/';
-    try {
-      const requestUrl = new URL(request.url);
-      origin = requestUrl.origin;
-    } catch {}
-    return NextResponse.redirect(`${origin}/sign-in?error=unknown`)
+    console.error('Error in Gmail auth callback:', error)
+    return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=unknown_error`)
   }
 } 
