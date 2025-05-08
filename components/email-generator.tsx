@@ -768,39 +768,55 @@ export function EmailGenerator() {
                           <TabsTrigger value="advanced">Advanced</TabsTrigger>
                         </TabsList>
                         <TabsContent value="basic" className="space-y-4 pt-4">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="track-opens"
-                              defaultChecked
-                              className="h-4 w-4 rounded border-gray-300"
-                            />
-                            <Label htmlFor="track-opens" className="text-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center h-5 w-5">
+                              <input
+                                type="checkbox"
+                                id="track-opens"
+                                defaultChecked
+                                className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500"
+                              />
+                            </div>
+                            <Label htmlFor="track-opens" className="text-sm font-medium cursor-pointer flex-grow">
                               Track opens
                             </Label>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="track-clicks"
-                              defaultChecked
-                              className="h-4 w-4 rounded border-gray-300"
-                            />
-                            <Label htmlFor="track-clicks" className="text-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center h-5 w-5">
+                              <input
+                                type="checkbox"
+                                id="track-clicks"
+                                defaultChecked
+                                className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500"
+                              />
+                            </div>
+                            <Label htmlFor="track-clicks" className="text-sm font-medium cursor-pointer flex-grow">
                               Track link clicks
                             </Label>
                           </div>
                         </TabsContent>
                         <TabsContent value="advanced" className="space-y-4 pt-4">
-                          <div className="flex items-center space-x-2">
-                            <input type="checkbox" id="auto-follow" className="h-4 w-4 rounded border-gray-300" />
-                            <Label htmlFor="auto-follow" className="text-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center h-5 w-5">
+                              <input 
+                                type="checkbox" 
+                                id="auto-follow" 
+                                className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500" 
+                              />
+                            </div>
+                            <Label htmlFor="auto-follow" className="text-sm font-medium cursor-pointer flex-grow">
                               Auto follow-up in 3 days
                             </Label>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <input type="checkbox" id="schedule" className="h-4 w-4 rounded border-gray-300" />
-                            <Label htmlFor="schedule" className="text-sm">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-center h-5 w-5">
+                              <input 
+                                type="checkbox" 
+                                id="schedule" 
+                                className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500" 
+                              />
+                            </div>
+                            <Label htmlFor="schedule" className="text-sm font-medium cursor-pointer flex-grow">
                               Schedule for optimal time
                             </Label>
                           </div>
