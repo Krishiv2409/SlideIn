@@ -7,7 +7,13 @@ import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { toast } from 'sonner';
 import { GmailConnectButton } from './gmail-connect-button';
-import { getGmailTokens, updateGmailTokens, saveGmailTokens } from '@/lib/supabase-storage';
+import { 
+  getGmailTokens, 
+  updateGmailTokens, 
+  saveGmailTokens,
+  reconnectGmailAccount,
+  syncGmailTokensFromEmailAccounts
+} from '@/lib/supabase-storage';
 import { supabase } from '@/lib/supabase';
 import axios from 'axios';
 
@@ -38,6 +44,9 @@ export function GmailTest() {
           });
           setIsGmailReady(true);
         } else {
+          // Try to sync tokens from email_accounts to gmail_tokens
+          await syncGmailTokensFromEmailAccounts();
+          
           // Try to get tokens from our storage
           const tokens = await getGmailTokens();
           if (tokens) {
@@ -75,38 +84,51 @@ export function GmailTest() {
       return;
     }
     
-    const gmailTokens = await getGmailTokens();
-    if (!gmailTokens) {
-      toast.error('Gmail is not connected. Please connect your Gmail account first.');
-      return;
-    }
-    
-    setIsSending(true);
-    
     try {
-      const response = await axios.post('/api/send-email', {
-        to,
-        subject,
-        html: content,
-        gmailTokens
-      });
+      const gmailTokens = await getGmailTokens();
+      if (!gmailTokens) {
+        toast.error('Gmail is not connected. Please connect your Gmail account first.');
+        return;
+      }
       
-      if (response.data.success) {
-        toast.success('Email sent successfully!');
-      } else {
-        // Check if token was refreshed
-        if (response.data.refreshedTokens) {
-          await updateGmailTokens(response.data.refreshedTokens);
-          toast.error('Token refreshed. Please try again.');
+      setIsSending(true);
+      
+      try {
+        const response = await axios.post('/api/send-email', {
+          to,
+          subject,
+          html: content,
+          gmailTokens
+        });
+        
+        if (response.data.success) {
+          toast.success('Email sent successfully!');
         } else {
-          toast.error(response.data.error || 'Failed to send email');
+          // Check if token was refreshed
+          if (response.data.refreshedTokens) {
+            await updateGmailTokens(response.data.refreshedTokens);
+            toast.error('Token refreshed. Please try again.');
+          } else {
+            toast.error(response.data.error || 'Failed to send email');
+          }
         }
+      } catch (error) {
+        console.error('Error sending test email:', error);
+        toast.error('Failed to send email');
+      } finally {
+        setIsSending(false);
       }
     } catch (error) {
-      console.error('Error sending test email:', error);
-      toast.error('Failed to send email');
-    } finally {
-      setIsSending(false);
+      console.error('Error getting Gmail tokens:', error);
+      
+      // Handle the specific reconnection error
+      if (error instanceof Error && error.message.includes('Gmail reconnection required')) {
+        toast.error("Your Gmail connection needs to be refreshed. Please reconnect.");
+        reconnectGmailAccount();
+        return;
+      }
+      
+      toast.error('Failed to access your Gmail account. Please try reconnecting.');
     }
   };
   

@@ -12,7 +12,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
 import { cn } from "@/lib/utils"
-import { getGmailTokens, updateGmailTokens, isGmailConnected } from '@/lib/supabase-storage'
+import { 
+  getGmailTokens, 
+  updateGmailTokens, 
+  isGmailConnected, 
+  reconnectGmailAccount,
+  syncGmailTokensFromEmailAccounts
+} from '@/lib/supabase-storage'
 import { GmailConnectButton } from './gmail-connect-button'
 import { createBrowserClient } from "@supabase/ssr"
 import { toast } from "sonner"
@@ -193,6 +199,15 @@ export function EmailGenerator() {
       } catch (error) {
         console.error('DEBUG: Error during initial session refresh:', error);
       }
+      
+      // Attempt to sync Gmail tokens between tables
+      try {
+        const syncResult = await syncGmailTokensFromEmailAccounts();
+        console.log('DEBUG: Gmail token sync result:', syncResult);
+      } catch (error) {
+        console.error('DEBUG: Error syncing Gmail tokens:', error);
+      }
+      
       // Load accounts regardless of session refresh outcome
       await loadEmailAccounts();
     };
@@ -347,56 +362,80 @@ export function EmailGenerator() {
     }
     
     // Get Gmail tokens from Supabase storage
-    const gmailTokens = await getGmailTokens();
-    if (!gmailTokens) {
-      toast.error("Please connect your Gmail account first. Click the 'Connect Gmail' button in the top right corner.");
-      return;
-    }
-    
-    setIsSending(true);
-    setSendStatus('idle');
-    
     try {
-      const response = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: recipientEmail,
-          subject,
-          html: emailBody.replace(/\n/g, '<br>'),
-          gmailTokens
-        }),
-      });
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        // Check if token was refreshed
-        if (responseData.refreshedTokens) {
-          await updateGmailTokens(responseData.refreshedTokens);
-          toast.error('Token refreshed. Please try sending again.');
-          setSendStatus('error');
-          return;
-        }
-        
-        // Extract the error message from the response
-        const errorMessage = responseData.error && typeof responseData.error === 'string' 
-          ? responseData.error 
-          : responseData.error?.message || 'Failed to send email';
-        
-        throw new Error(errorMessage);
+      const gmailTokens = await getGmailTokens();
+      if (!gmailTokens) {
+        toast.error("Please connect your Gmail account first. Click the 'Connect Gmail' button in the top right corner.");
+        return;
       }
+      
+      setIsSending(true);
+      setSendStatus('idle');
+      
+      try {
+        const response = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: recipientEmail,
+            subject,
+            html: emailBody.replace(/\n/g, '<br>'),
+            gmailTokens
+          }),
+        });
 
-      setSendStatus('success');
-      toast.success("Email sent successfully! 🎉");
+        const responseData = await response.json();
+
+        if (!response.ok) {
+          // Check if token was refreshed
+          if (responseData.refreshedTokens) {
+            await updateGmailTokens(responseData.refreshedTokens);
+            toast.error('Token refreshed. Please try sending again.');
+            setSendStatus('error');
+            return;
+          }
+          
+          // Extract the error message from the response
+          const errorMessage = responseData.error && typeof responseData.error === 'string' 
+            ? responseData.error 
+            : responseData.error?.message || 'Failed to send email';
+          
+          throw new Error(errorMessage);
+        }
+
+        setSendStatus('success');
+        toast.success("Email sent successfully! 🎉");
+        
+        // Reset the send status after 2 seconds
+        setTimeout(() => {
+          setSendStatus('idle');
+        }, 2000);
+      } catch (error) {
+        console.error('Error sending email:', error);
+        setSendStatus('error');
+        toast.error(error instanceof Error ? error.message : "Failed to send email. Please try again.");
+        
+        // Reset error status after 3 seconds
+        setTimeout(() => {
+          setSendStatus('idle');
+        }, 3000);
+      } finally {
+        setIsSending(false);
+      }
     } catch (error) {
-      console.error('Error sending email:', error);
-      setSendStatus('error');
-      toast.error(error instanceof Error ? error.message : "Failed to send email. Please try again.");
-    } finally {
-      setIsSending(false);
+      console.error('Error getting Gmail tokens:', error);
+      
+      // Handle the specific reconnection error
+      if (error instanceof Error && error.message.includes('Gmail reconnection required')) {
+        toast.error("Your Gmail connection needs to be refreshed. Please reconnect your Gmail account.");
+        // Use the new helper function instead of just handleGmailConnect
+        reconnectGmailAccount();
+        return;
+      }
+      
+      toast.error("Failed to access your Gmail account. Please try reconnecting.");
     }
   }
 
@@ -650,33 +689,26 @@ export function EmailGenerator() {
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="sender">Send from</Label>
+                      <Label htmlFor="sender" className="text-sm font-medium text-gray-700">Send from</Label>
                       <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-                        <SelectTrigger className="w-[300px]">
-                          <SelectValue placeholder="Select sender account" />
+                        <SelectTrigger 
+                          className="w-full border border-gray-200 shadow-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-pink-500 focus:ring-opacity-50 focus:border-pink-500 transition-all duration-200"
+                        >
+                          <SelectValue placeholder="Select sender account">
+                            {selectedAccount && emailAccounts.find(acc => acc.id === selectedAccount)?.email}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {emailAccounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
+                            <SelectItem 
+                              key={account.id} 
+                              value={account.id}
+                              className="flex items-center"
+                            >
                               <div className="flex items-center gap-2">
-                                {account.provider === 'gmail' ? (
-                                  <svg className="h-4 w-4" viewBox="0 0 24 24">
-                                    <path
-                                      fill="currentColor"
-                                      d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"
-                                    />
-                                  </svg>
-                                ) : (
-                                  <svg className="h-4 w-4" viewBox="0 0 24 24">
-                                    <path
-                                      fill="currentColor"
-                                      d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"
-                                    />
-                                  </svg>
-                                )}
-                                <span>{account.displayName || account.email}</span>
+                                <span className="text-sm">{account.email}</span>
                                 {account.isDefault && (
-                                  <span className="text-xs text-muted-foreground">(Default)</span>
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 ml-1">Default</span>
                                 )}
                               </div>
                             </SelectItem>
@@ -685,7 +717,7 @@ export function EmailGenerator() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="recipient">Send to</Label>
+                      <Label htmlFor="recipient" className="text-sm font-medium text-gray-700">Send to</Label>
                       <div className="relative">
                         <Input 
                           id="recipient" 
@@ -693,14 +725,15 @@ export function EmailGenerator() {
                           value={recipientEmail}
                           onChange={(e) => setRecipientEmail(e.target.value)}
                           onFocus={() => extractedEmails.length > 0 && setShowEmailDropdown(true)}
+                          className="w-full border border-gray-200 shadow-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-pink-500 focus:ring-opacity-50 focus:border-pink-500 transition-all duration-200"
                         />
                         {showEmailDropdown && extractedEmails.length > 0 && (
-                          <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border border-gray-200">
+                          <div className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border border-gray-200 overflow-hidden">
                             <ul className="py-1 max-h-56 overflow-auto">
                               {extractedEmails.map((email, index) => (
                                 <li 
                                   key={index} 
-                                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                  className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm transition-colors duration-150"
                                   onClick={() => {
                                     setRecipientEmail(email);
                                     setShowEmailDropdown(false);
@@ -712,7 +745,7 @@ export function EmailGenerator() {
                             </ul>
                             <div className="py-1 border-t border-gray-200">
                               <div 
-                                className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-500"
+                                className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm text-gray-500 text-center transition-colors duration-150"
                                 onClick={() => setShowEmailDropdown(false)}
                               >
                                 Close
@@ -722,7 +755,7 @@ export function EmailGenerator() {
                         )}
                       </div>
                       {extractedEmails.length > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-xs text-gray-500 mt-1">
                           {extractedEmails.length} email{extractedEmails.length !== 1 ? 's' : ''} found on webpage
                         </p>
                       )}
@@ -777,42 +810,58 @@ export function EmailGenerator() {
                     <Button 
                       onClick={handleSend} 
                       className={cn(
-                        "w-full text-white hover:bg-pink-600 transition-all duration-200",
-                        isSending ? "bg-pink-400" : "bg-pink-500",
-                        sendStatus === 'success' && "bg-green-500 hover:bg-green-600",
-                        sendStatus === 'error' && "bg-red-500 hover:bg-red-600"
-                      )} 
+                        "w-full shadow-sm font-medium flex items-center justify-center transition-all duration-300",
+                        isSending ? 
+                          "bg-pink-400 text-white hover:bg-pink-500" : 
+                          sendStatus === 'success' ? 
+                            "bg-emerald-500 text-white hover:bg-emerald-600" : 
+                            sendStatus === 'error' ? 
+                              "bg-red-500 text-white hover:bg-red-600" :
+                              "bg-pink-500 text-white hover:bg-pink-600"
+                      )}
                       size="lg"
                       disabled={isSending}
                     >
-                      {isSending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Sending...
-                        </>
-                      ) : sendStatus === 'success' ? (
-                        <>
-                          <Check className="mr-2 h-4 w-4" />
-                          Sent!
-                        </>
-                      ) : sendStatus === 'error' ? (
-                        <>
-                          <X className="mr-2 h-4 w-4" />
-                          Failed
-                        </>
-                      ) : (
-                        <>
-                          <Send className="mr-2 h-4 w-4" />
-                          Send Now
-                        </>
-                      )}
+                      <div className="flex items-center justify-center gap-2 py-1">
+                        {isSending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Sending...</span>
+                          </>
+                        ) : sendStatus === 'success' ? (
+                          <>
+                            <Check className="h-5 w-5 animate-fadeIn" />
+                            <span className="animate-fadeIn">Sent!</span>
+                          </>
+                        ) : sendStatus === 'error' ? (
+                          <>
+                            <X className="h-4 w-4" />
+                            <span>Failed</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4" />
+                            <span>Send Now</span>
+                          </>
+                        )}
+                      </div>
                     </Button>
-                    <div className="rounded-md bg-muted p-3">
+                    <style jsx global>{`
+                      @keyframes fadeIn {
+                        from { opacity: 0; transform: translateY(-3px); }
+                        to { opacity: 1; transform: translateY(0); }
+                      }
+                      .animate-fadeIn {
+                        animation: fadeIn 0.3s ease-out forwards;
+                      }
+                    `}</style>
+                    
+                    <div className="rounded-md bg-muted p-3 mt-2">
                       <div className="flex items-center gap-2 text-sm">
-                        <Sparkles className="h-4 w-4 text-pink-500" />
-                        <span>
+                        <Sparkles className="h-4 w-4 text-pink-500 flex-shrink-0" />
+                        <span className="text-gray-600">
                           <span className="font-medium">Pro tip:</span> Emails sent between 9-11am have 32% higher
-                          response rates 🚀
+                          response rates
                         </span>
                       </div>
                     </div>

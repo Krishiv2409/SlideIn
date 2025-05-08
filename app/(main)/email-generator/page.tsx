@@ -56,11 +56,15 @@ export default function EmailGeneratorPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center h-full w-full">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
       </div>
     );
   }
 
-  return <EmailGenerator />;
+  return (
+    <div className="w-full h-full">
+      <EmailGenerator />
+    </div>
+  );
 }
