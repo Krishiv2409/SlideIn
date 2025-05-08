@@ -41,20 +41,72 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(`${baseUrl}/settings?error=no_supabase_user`);
 
-  // Save to email_accounts
-  await supabase.from('email_accounts').insert({
-    user_id: user.id,
-    email: userInfo.email,
-    provider: 'gmail',
-    access_token: tokenData.access_token,
-    refresh_token: tokenData.refresh_token,
-    expiry_date: Date.now() + (tokenData.expires_in || 3600) * 1000,
-    display_name: userInfo.name || userInfo.email,
-    is_default: false,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  });
+  // Check if this email already exists for this user
+  const { data: existingAccount, error: queryError } = await supabase
+    .from('email_accounts')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('email', userInfo.email)
+    .single();
+
+  if (queryError && queryError.code !== 'PGRST116') { // PGRST116 means "no rows found"
+    console.error('Error checking for existing account:', queryError);
+    return NextResponse.redirect(`${baseUrl}/settings?error=database_error`);
+  }
+
+  const currentTime = Date.now();
+  const expiryDate = currentTime + (tokenData.expires_in || 3600) * 1000;
+
+  if (existingAccount) {
+    // Update existing account with new tokens
+    const { error: updateError } = await supabase
+      .from('email_accounts')
+      .update({
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token || 'EMPTY', // Fallback in case no refresh token
+        expiry_date: expiryDate,
+        display_name: userInfo.name || userInfo.email,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingAccount.id);
+
+    if (updateError) {
+      console.error('Error updating existing account:', updateError);
+      return NextResponse.redirect(`${baseUrl}/settings?error=update_failed`);
+    }
+  } else {
+    // Check if this is the first account for this user
+    const { data: accountCount, error: countError } = await supabase
+      .from('email_accounts')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id);
+
+    // Set as default if this is the first account (accountCount is 0)
+    // Make sure we check the count properly even if there was an error in the query
+    const isFirstAccount = !countError && accountCount !== null && accountCount.length === 0;
+
+    // Create new account
+    const { error: insertError } = await supabase
+      .from('email_accounts')
+      .insert({
+        user_id: user.id,
+        email: userInfo.email,
+        provider: 'gmail',
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token || 'EMPTY',
+        expiry_date: expiryDate,
+        display_name: userInfo.name || userInfo.email,
+        is_default: isFirstAccount, // Only set as default if it's the first account
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+
+    if (insertError) {
+      console.error('Error creating new account:', insertError);
+      return NextResponse.redirect(`${baseUrl}/settings?error=insert_failed`);
+    }
+  }
 
   // Redirect to the email generator page after connecting Gmail
   return NextResponse.redirect(`${baseUrl}/email-generator?success=gmail_connected`);
-} 
+}

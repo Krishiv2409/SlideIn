@@ -11,9 +11,10 @@ import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createBrowserClient } from "@supabase/ssr"
 import { toast } from "sonner"
-import { Loader2, Mail, X, Plus } from "lucide-react"
+import { Loader2, Mail } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { showToast } from "@/components/ui/toast-config"
 
 interface EmailAccount {
   id: string
@@ -47,21 +48,19 @@ export function SettingsForm() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
   const router = useRouter()
-
+  
   useEffect(() => {
     setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (!mounted) return;
-
+    
+    // Immediately check auth rather than waiting for mounted to be true
     const checkAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession()
         
         if (error) {
           console.error('Session error:', error)
-          throw error
+          router.push('/sign-in')
+          return
         }
 
         if (session) {
@@ -74,6 +73,9 @@ export function SettingsForm() {
       } catch (error) {
         console.error('Auth error:', error)
         router.push('/sign-in')
+      } finally {
+        // Ensure loading state is turned off even if there's an error
+        setIsLoading(false)
       }
     }
 
@@ -94,11 +96,12 @@ export function SettingsForm() {
     return () => {
       subscription.unsubscribe()
     }
-  }, [mounted, supabase, router])
+  }, [supabase, router]) // Remove mounted dependency
 
   const loadEmailAccounts = async (userId: string) => {
     if (!supabase) {
       console.error('Supabase client not initialized');
+      showToast.error({ message: 'Database connection not available' });
       setIsLoading(false);
       return;
     }
@@ -139,7 +142,10 @@ export function SettingsForm() {
       setEmailAccounts(formattedAccounts);
     } catch (error) {
       console.error('Error loading email accounts:', error instanceof Error ? error.message : 'Unknown error');
-      toast.error('Failed to load email accounts. Please try refreshing the page.');
+      showToast.error({ 
+        message: 'Failed to load email accounts', 
+        description: 'Please try refreshing the page' 
+      });
     } finally {
       setIsLoading(false);
     }
@@ -199,90 +205,139 @@ export function SettingsForm() {
 
   const handleRemoveAccount = async (accountId: string) => {
     if (!supabase) {
-      toast.error('Database connection not available');
+      showToast.error({ message: 'Database connection not available' });
       return;
     }
 
     try {
-      if (accountId.startsWith('gmail-')) {
-        const email = accountId.replace('gmail-', '');
-        
-        // Remove from Supabase
-        const { error } = await supabase
-          .from('email_accounts')
-          .delete()
-          .match({ email });
-        
-        if (error) throw error;
-        
-        // Update state
-        setEmailAccounts(accounts => {
-          const remainingAccounts = accounts.filter(acc => acc.id !== accountId);
-          
-          // If we removed the default account and have other accounts, set a new default
-          if (remainingAccounts.length > 0 && !remainingAccounts.some(acc => acc.isDefault)) {
-            // Update default in Supabase
-            supabase
-              .from('email_accounts')
-              .update({ is_default: true })
-              .match({ email: remainingAccounts[0].email });
-            
-            return remainingAccounts.map((acc, index) => ({
-              ...acc,
-              isDefault: index === 0
-            }));
-          }
-          
-          return remainingAccounts;
+      // Get current session for user ID
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.user?.id) {
+        console.error('Session error during account removal:', sessionError);
+        showToast.error({ 
+          message: 'Authentication error', 
+          description: 'Please try signing in again' 
         });
-        
-        toast.success('Gmail account removed successfully');
+        return;
       }
-      // Add Outlook removal logic here when implemented
+      
+      // Check if this is a default account
+      const accountToRemove = emailAccounts.find(acc => acc.id === accountId);
+      if (!accountToRemove) {
+        throw new Error('Account not found');
+      }
+
+      const isDefaultAccount = accountToRemove.isDefault;
+      
+      // Show loading toast
+      showToast.info({ message: 'Removing email account...' });
+      
+      // Remove account from database using the database ID
+      const { error } = await supabase
+        .from('email_accounts')
+        .delete()
+        .eq('id', accountId);
+      
+      if (error) {
+        console.error('Error deleting account from database:', error);
+        throw error;
+      }
+      
+      // If we removed the default account and have other accounts, set a new default
+      if (isDefaultAccount) {
+        // Get remaining accounts
+        const { data: remainingAccounts, error: fetchError } = await supabase
+          .from('email_accounts')
+          .select('id')
+          .eq('user_id', session.user.id)
+          .limit(1);
+          
+        if (!fetchError && remainingAccounts && remainingAccounts.length > 0) {
+          // Set the first remaining account as default
+          const { error: updateError } = await supabase
+            .from('email_accounts')
+            .update({ is_default: true })
+            .eq('id', remainingAccounts[0].id);
+            
+          if (updateError) {
+            console.error('Error setting new default account:', updateError);
+            // Continue despite this error, as the account was still removed
+          }
+        }
+      }
+      
+      // Reload the accounts list to reflect changes
+      await loadEmailAccounts(session.user.id);
+      
+      showToast.success({ 
+        message: 'Email account removed successfully' 
+      });
     } catch (error) {
       console.error('Error removing account:', error);
-      toast.error('Failed to remove account');
+      showToast.error({ 
+        message: 'Failed to remove account', 
+        description: error instanceof Error ? error.message : 'Unknown error' 
+      });
     }
   };
 
   const handleSetDefault = async (accountId: string) => {
     if (!supabase) {
-      toast.error('Database connection not available');
+      showToast.error({ message: 'Database connection not available' });
       return;
     }
 
     try {
-      const email = accountId.split('-')[1];
+      // Get current session for user ID
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.user?.id) {
+        console.error('Session error during default setting:', sessionError);
+        showToast.error({ 
+          message: 'Authentication error', 
+          description: 'Please try signing in again' 
+        });
+        return;
+      }
+
+      // Show loading toast
+      showToast.info({ message: 'Setting default email account...' });
       
-      // Update in Supabase
-      const { error } = await supabase
+      // First, unset all defaults for this user
+      const { error: clearError } = await supabase
         .from('email_accounts')
         .update({ is_default: false })
-        .neq('email', email);
+        .eq('user_id', session.user.id);
       
-      if (error) throw error;
+      if (clearError) {
+        console.error('Error clearing default flags:', clearError);
+        throw clearError;
+      }
       
+      // Set the specified account as default
       const { error: setDefaultError } = await supabase
         .from('email_accounts')
         .update({ is_default: true })
-        .match({ email });
+        .eq('id', accountId);
       
-      if (setDefaultError) throw setDefaultError;
+      if (setDefaultError) {
+        console.error('Error setting default account:', setDefaultError);
+        throw setDefaultError;
+      }
       
-      // Update state
-      setEmailAccounts(accounts => accounts.map(acc => ({
-        ...acc,
-        isDefault: acc.id === accountId
-      })));
+      // Reload the accounts list to reflect changes
+      await loadEmailAccounts(session.user.id);
       
-      toast.success('Default email account updated');
+      showToast.success({ message: 'Default email account updated' });
     } catch (error) {
       console.error('Error setting default account:', error);
-      toast.error('Failed to update default account');
+      showToast.error({ 
+        message: 'Failed to update default account', 
+        description: error instanceof Error ? error.message : 'Unknown error' 
+      });
     }
   };
 
-  if (!mounted || !isAuthenticated) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -291,303 +346,343 @@ export function SettingsForm() {
   }
 
   return (
-    <Tabs defaultValue="account" className="space-y-6">
-      <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
-        <TabsTrigger value="account">Email Accounts</TabsTrigger>
-        <TabsTrigger value="preferences">Preferences</TabsTrigger>
-        <TabsTrigger value="notifications">Notifications</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="account" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Email Accounts</CardTitle>
-            <CardDescription>Connect your email accounts to send emails from SlideIn</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : emailAccounts.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No email accounts connected
-              </div>
-            ) : (
-              emailAccounts.map((account) => (
-                <div key={account.id} className="rounded-md border p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <div className={cn(
-                          "h-8 w-8 rounded-full flex items-center justify-center",
-                          account.provider === 'gmail' ? "bg-pink-100" : "bg-blue-100"
-                        )}>
-                          <span className={cn(
-                            "text-sm font-medium",
-                            account.provider === 'gmail' ? "text-pink-500" : "text-blue-500"
-                          )}>
-                            {account.provider === 'gmail' ? 'G' : 'O'}
-                          </span>
-                        </div>
-                        <div>
+    <div className="w-full h-full">
+      <Tabs defaultValue="account" className="w-full h-full">
+        <div className="sticky top-0 z-10 pt-4 pb-3 backdrop-blur-sm bg-background/95 border-b">
+          <div className="flex justify-center">
+            <TabsList className="grid grid-cols-3 w-full max-w-md mx-auto rounded-xl p-1 gap-1 bg-muted/30">
+              <TabsTrigger value="account" className="rounded-lg py-2.5 text-sm font-medium">
+                Email Accounts
+              </TabsTrigger>
+              <TabsTrigger value="preferences" className="rounded-lg py-2.5 text-sm font-medium">
+                Preferences
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="rounded-lg py-2.5 text-sm font-medium">
+                Notifications
+              </TabsTrigger>
+            </TabsList>
+          </div>
+        </div>
+        
+        <TabsContent value="account" className="w-full h-[calc(100vh-120px)] overflow-y-auto">
+          <div className="w-full max-w-3xl mx-auto px-4 py-6">
+            <Card className="shadow-sm overflow-hidden border rounded-xl w-full">
+              <CardHeader className="bg-gradient-to-r from-slate-50 to-white pb-6 border-b">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Email Accounts</CardTitle>
+                    <CardDescription>Connect your email accounts to send emails from SlideIn</CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setIsLoading(true);
+                      try {
+                        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                        if (sessionError || !session?.user?.id) {
+                          throw new Error('Authentication error');
+                        }
+                        await loadEmailAccounts(session.user.id);
+                        showToast.success({ message: "Accounts refreshed" });
+                      } catch (error) {
+                        console.error('Error refreshing accounts:', error);
+                        showToast.error({ message: 'Failed to refresh accounts' });
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Refresh"
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : emailAccounts.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No email accounts connected
+                  </div>
+                ) : (
+                  emailAccounts.map((account) => (
+                    <div key={account.id} className="rounded-lg border p-4 transition-all hover:bg-slate-50">
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium">{account.email}</p>
-                            {account.isDefault && (
-                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                                Default
+                            <div className={cn(
+                              "h-8 w-8 rounded-full flex items-center justify-center",
+                              account.provider === 'gmail' ? "bg-pink-100" : "bg-blue-100"
+                            )}>
+                              <span className={cn(
+                                "text-sm font-medium",
+                                account.provider === 'gmail' ? "text-pink-500" : "text-blue-500"
+                              )}>
+                                {account.provider === 'gmail' ? 'G' : 'O'}
                               </span>
-                            )}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium">{account.email}</p>
+                                {account.isDefault && (
+                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                    Default
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-muted-foreground capitalize">{account.provider}</p>
+                            </div>
                           </div>
-                          <p className="text-sm text-muted-foreground capitalize">{account.provider}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          {!account.isDefault && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                showToast.info({ 
+                                  message: "Setting default email account",
+                                  description: "Are you sure you want to change your default email?"
+                                });
+                                handleSetDefault(account.id);
+                              }}
+                            >
+                              Set as Default
+                            </Button>
+                          )}
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-destructive"
+                            onClick={() => {
+                              showToast.warning({ 
+                                message: "Removing email account",
+                                description: "Are you sure you want to remove this email account?"
+                              });
+                              handleRemoveAccount(account.id);
+                            }}
+                          >
+                            Remove
+                          </Button>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {!account.isDefault && (
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleSetDefault(account.id)}
-                        >
-                          Set as Default
-                        </Button>
-                      )}
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-destructive"
-                        onClick={() => handleRemoveAccount(account.id)}
-                      >
-                        Remove
-                      </Button>
+                  ))
+                )}
+
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <Button
+                    className="w-full bg-white hover:bg-slate-50 text-black border"
+                    variant="outline"
+                    onClick={() => { window.location.href = '/api/gmail-oauth/start'; }}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="52 42 88 66" width="20" height="20" className="shrink-0">
+                        <path fill="#4285f4" d="M58 108h14V74L52 59v43c0 3.32 2.69 6 6 6"/>
+                        <path fill="#34a853" d="M120 108h14c3.32 0 6-2.69 6-6V59l-20 15"/>
+                        <path fill="#fbbc04" d="M120 48v26l20-15v-8c0-7.42-8.47-11.65-14.4-7.2"/>
+                        <path fill="#ea4335" d="M72 74V48l24 18 24-18v26L96 92"/>
+                        <path fill="#c5221f" d="M52 51v8l20 15V48l-5.6-4.2c-5.94-4.45-14.4-.22-14.4 7.2"/>
+                      </svg>
+                      Connect Gmail
+                    </div>
+                  </Button>
+                  <Button 
+                    className="w-full" 
+                    variant="outline"
+                    disabled
+                  >
+                    <Mail className="mr-2 h-4 w-4" />
+                    Connect Outlook
+                    <span className="ml-2 text-xs text-muted-foreground">(Coming soon)</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="preferences" className="w-full h-[calc(100vh-120px)] overflow-y-auto">
+          <div className="w-full max-w-3xl mx-auto px-4 py-6">
+            <Card className="shadow-sm overflow-hidden border rounded-xl w-full">
+              <CardHeader className="bg-gradient-to-r from-slate-50 to-white pb-6 border-b">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Email Preferences</CardTitle>
+                    <CardDescription>Customize your email sending preferences</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Default Signature</h3>
+                  <div className="rounded-md border">
+                    <textarea
+                      className="min-h-[120px] w-full resize-none rounded-md border-0 p-3 text-sm"
+                      placeholder="Enter your default signature..."
+                      defaultValue="Best regards,&#10;Your Name&#10;Your Position | Your Company&#10;your@email.com | (123) 456-7890"
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Follow-up Settings</h3>
+                  <div className="grid gap-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Auto follow-up</Label>
+                        <p className="text-sm text-muted-foreground">Automatically send follow-up emails</p>
+                      </div>
+                      <Switch />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Follow-up delay</Label>
+                      <Select defaultValue="3">
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select days" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2">2 days</SelectItem>
+                          <SelectItem value="3">3 days</SelectItem>
+                          <SelectItem value="5">5 days</SelectItem>
+                          <SelectItem value="7">7 days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Maximum follow-ups</Label>
+                      <Select defaultValue="2">
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select number" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 follow-up</SelectItem>
+                          <SelectItem value="2">2 follow-ups</SelectItem>
+                          <SelectItem value="3">3 follow-ups</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
-              ))
-            )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <Button
-                className="w-full"
-                variant="outline"
-                onClick={() => { window.location.href = '/api/gmail-oauth/start'; }}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Connect Gmail
-              </Button>
-              <Button 
-                className="w-full" 
-                variant="outline"
-                disabled
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Connect Outlook
-                <span className="ml-2 text-xs text-muted-foreground">(Coming soon)</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                <Separator />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>SMTP Settings</CardTitle>
-            <CardDescription>Configure custom SMTP server for sending emails</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="smtp-host">SMTP Host</Label>
-                <Input id="smtp-host" placeholder="smtp.example.com" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="smtp-port">SMTP Port</Label>
-                <Input id="smtp-port" placeholder="587" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="smtp-user">Username</Label>
-                <Input id="smtp-user" placeholder="username" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="smtp-pass">Password</Label>
-                <Input id="smtp-pass" type="password" placeholder="••••••••" />
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch id="smtp-ssl" />
-              <Label htmlFor="smtp-ssl">Use SSL/TLS</Label>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button>Save SMTP Settings</Button>
-          </CardFooter>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="preferences" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Email Preferences</CardTitle>
-            <CardDescription>Customize your email sending preferences</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Default Signature</h3>
-              <div className="rounded-md border">
-                <textarea
-                  className="min-h-[120px] w-full resize-none rounded-md border-0 p-3 text-sm"
-                  placeholder="Enter your default signature..."
-                  defaultValue="Best regards,&#10;Your Name&#10;Your Position | Your Company&#10;your@email.com | (123) 456-7890"
-                />
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Follow-up Settings</h3>
-              <div className="grid gap-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Auto follow-up</Label>
-                    <p className="text-sm text-muted-foreground">Automatically send follow-up emails</p>
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Email Tracking</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <Switch id="track-opens" defaultChecked />
+                      <Label htmlFor="track-opens">Track email opens</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch id="track-clicks" defaultChecked />
+                      <Label htmlFor="track-clicks">Track link clicks</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch id="track-replies" defaultChecked />
+                      <Label htmlFor="track-replies">Track replies</Label>
+                    </div>
                   </div>
-                  <Switch />
                 </div>
+              </CardContent>
+              <CardFooter className="border-t bg-slate-50 py-4">
+                <Button>Save Preferences</Button>
+              </CardFooter>
+            </Card>
+          </div>
+        </TabsContent>
 
-                <div className="space-y-2">
-                  <Label>Follow-up delay</Label>
-                  <Select defaultValue="3">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select days" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2">2 days</SelectItem>
-                      <SelectItem value="3">3 days</SelectItem>
-                      <SelectItem value="5">5 days</SelectItem>
-                      <SelectItem value="7">7 days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Maximum follow-ups</Label>
-                  <Select defaultValue="2">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select number" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1 follow-up</SelectItem>
-                      <SelectItem value="2">2 follow-ups</SelectItem>
-                      <SelectItem value="3">3 follow-ups</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Email Tracking</h3>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Switch id="track-opens" defaultChecked />
-                  <Label htmlFor="track-opens">Track email opens</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch id="track-clicks" defaultChecked />
-                  <Label htmlFor="track-clicks">Track link clicks</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch id="track-replies" defaultChecked />
-                  <Label htmlFor="track-replies">Track replies</Label>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button>Save Preferences</Button>
-          </CardFooter>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="notifications" className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Notification Settings</CardTitle>
-            <CardDescription>Configure how you want to be notified</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Email Notifications</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="notify-opens">When someone opens your email</Label>
-                  <Switch id="notify-opens" defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="notify-replies">When someone replies to your email</Label>
-                  <Switch id="notify-replies" defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="notify-clicks">When someone clicks a link</Label>
-                  <Switch id="notify-clicks" />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Daily Digest</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Daily email summary</Label>
-                    <p className="text-sm text-muted-foreground">Receive a daily summary of all activity</p>
+        <TabsContent value="notifications" className="w-full h-[calc(100vh-120px)] overflow-y-auto">
+          <div className="w-full max-w-3xl mx-auto px-4 py-6">
+            <Card className="shadow-sm overflow-hidden border rounded-xl w-full">
+              <CardHeader className="bg-gradient-to-r from-slate-50 to-white pb-6 border-b">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Notification Settings</CardTitle>
+                    <CardDescription>Configure how you want to be notified</CardDescription>
                   </div>
-                  <Switch defaultChecked />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-5 pt-6">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Email Notifications</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="notify-opens">When someone opens your email</Label>
+                      <Switch id="notify-opens" defaultChecked />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="notify-replies">When someone replies to your email</Label>
+                      <Switch id="notify-replies" defaultChecked />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="notify-clicks">When someone clicks a link</Label>
+                      <Switch id="notify-clicks" />
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Preferred time</Label>
-                  <Select defaultValue="morning">
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select time" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="morning">Morning (9 AM)</SelectItem>
-                      <SelectItem value="afternoon">Afternoon (2 PM)</SelectItem>
-                      <SelectItem value="evening">Evening (6 PM)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
+                <Separator />
 
-            <Separator />
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Daily Digest</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Daily email summary</Label>
+                        <p className="text-sm text-muted-foreground">Receive a daily summary of all activity</p>
+                      </div>
+                      <Switch defaultChecked />
+                    </div>
 
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Browser Notifications</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="browser-notify">Enable browser notifications</Label>
-                  <Switch id="browser-notify" defaultChecked />
+                    <div className="space-y-2">
+                      <Label>Preferred time</Label>
+                      <Select defaultValue="morning">
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="morning">Morning (9 AM)</SelectItem>
+                          <SelectItem value="afternoon">Afternoon (2 PM)</SelectItem>
+                          <SelectItem value="evening">Evening (6 PM)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
-                <Button variant="outline" size="sm">
-                  Test Browser Notification
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button>Save Notification Settings</Button>
-          </CardFooter>
-        </Card>
-      </TabsContent>
-    </Tabs>
-  )
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium">Browser Notifications</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="browser-notify">Enable browser notifications</Label>
+                      <Switch id="browser-notify" defaultChecked />
+                    </div>
+                    <Button variant="outline" size="sm">
+                      Test Browser Notification
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="border-t bg-slate-50 py-4">
+                <Button>Save Notification Settings</Button>
+              </CardFooter>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 }
