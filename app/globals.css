@@ -37,8 +37,8 @@
     
     /* Sidebar width variables */
     --sidebar-width: 16rem;
-    --sidebar-width-collapsed: 3rem; 
-    --sidebar-width-icon: 3rem;
+    --sidebar-width-collapsed: 4.5rem; 
+    --sidebar-width-icon: 4.5rem;
     
     /* Content max-width variables for centering */
     --content-max-width: 1200px;
@@ -191,8 +191,8 @@ body[data-sidebar-state="collapsed"] [data-sidebar="menu-button"] {
     
     /* Sidebar width variables */
     --sidebar-width: 16rem;
-    --sidebar-width-collapsed: 3rem; 
-    --sidebar-width-icon: 3rem;
+    --sidebar-width-collapsed: 4.5rem; 
+    --sidebar-width-icon: 4.5rem;
     
     /* Content max-width variables for centering */
     --content-max-width: 1200px;
