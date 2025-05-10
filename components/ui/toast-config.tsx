@@ -11,6 +11,7 @@ type ToastProps = {
 // Enhanced toast notifications with icons
 export const showToast = {
   success: ({ message, description }: ToastProps) => {
+    toast.dismiss();
     toast.success(
       <div className="flex">
         <Check className="h-5 w-5 mr-2 text-green-500" />
@@ -23,6 +24,7 @@ export const showToast = {
   },
   
   error: ({ message, description }: ToastProps) => {
+    toast.dismiss();
     toast.error(
       <div className="flex">
         <X className="h-5 w-5 mr-2 text-red-500" />
@@ -35,6 +37,7 @@ export const showToast = {
   },
   
   warning: ({ message, description }: ToastProps) => {
+    toast.dismiss();
     toast(
       <div className="flex">
         <AlertCircle className="h-5 w-5 mr-2 text-amber-500" />
@@ -47,6 +50,7 @@ export const showToast = {
   },
   
   info: ({ message, description }: ToastProps) => {
+    toast.dismiss();
     toast.info(
       <div className="flex">
         <Info className="h-5 w-5 mr-2 text-blue-500" />
@@ -66,11 +70,13 @@ export function CustomToaster() {
       position="top-right"
       toastOptions={{
         duration: 3000,
-        className: 'border shadow-lg rounded-lg', // Gives the toast a more polished look
+        className: 'border shadow-lg rounded-xl px-5 py-4 bg-white backdrop-blur-sm',
         style: {
-          padding: '16px',
-          backgroundColor: 'var(--background)',
-          color: 'var(--foreground)'
+          marginTop: 16,
+          marginRight: 16,
+          backgroundColor: 'var(--background, #fff)',
+          color: 'var(--foreground, #222)',
+          boxShadow: '0 4px 24px 0 rgba(0,0,0,0.08)',
         },
       }}
     />

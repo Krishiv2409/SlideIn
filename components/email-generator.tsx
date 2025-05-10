@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Loader2, Send, Sparkles, Mail, Check, X, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -61,6 +61,88 @@ interface EmailAccount {
   isConnected: boolean;
   displayName?: string;
   isDefault: boolean;
+}
+
+// Typing animation with fluid transitions and custom font
+function TypingEmailAnimation() {
+  // Update this list to change sample emails
+  const emails = [
+    'hello@slidein.ai',
+    'student@gatech.edu',
+    'founder@startup.com',
+    'contact@yourdomain.io'
+  ];
+  const [displayText, setDisplayText] = useState('');
+  const [currentEmailIndex, setCurrentEmailIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const [typingSpeed, setTypingSpeed] = useState(70); // slower for more fluid feel
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout | undefined;
+    if (!visible) {
+      // After fade out, switch to next email and fade in
+      timer = setTimeout(() => {
+        setCurrentEmailIndex((prev) => (prev + 1) % emails.length);
+        setIsDeleting(false);
+        setDisplayText('');
+        setVisible(true);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+    if (isDeleting) {
+      if (displayText.length > 0) {
+        timer = setTimeout(() => {
+          setDisplayText(prev => prev.slice(0, -1));
+        }, 35); // fast delete
+      } else {
+        setVisible(false); // trigger fade out
+      }
+    } else {
+      const currentEmail = emails[currentEmailIndex];
+      if (displayText.length < currentEmail.length) {
+        timer = setTimeout(() => {
+          setDisplayText(currentEmail.slice(0, displayText.length + 1));
+        }, typingSpeed);
+      } else {
+        timer = setTimeout(() => {
+          setIsDeleting(true);
+        }, 1200); // pause before deleting
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [displayText, isDeleting, currentEmailIndex, visible, typingSpeed, emails]);
+
+  return (
+    <div className="flex justify-center mb-2">
+      <div
+        className={`bg-[#F3F4F6] px-5 py-3 rounded-[16px] flex items-center justify-center text-center transition-all duration-300 ease-in-out min-w-[56px] min-h-[56px] shadow-sm 
+          ${visible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
+        `}
+        style={{
+          fontFamily: 'Fira Mono, Menlo, Consolas, monospace',
+        }}
+      >
+        <span className="font-mono text-gray-700 text-xl animate-blink tracking-tight select-none" style={{fontFamily: 'Fira Mono, Menlo, Consolas, monospace'}}>
+          {displayText}
+        </span>
+      </div>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500&display=swap');
+        .animate-blink::after {
+          content: '|';
+          margin-left: 1px;
+          animation: blink 1s step-end infinite;
+          display: inline-block;
+          font-weight: 400;
+        }
+        @keyframes blink {
+          from, to { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 export function EmailGenerator() {
@@ -449,9 +531,12 @@ export function EmailGenerator() {
         {isLoadingAccounts ? (
           <Card className="shadow-none border-none w-full max-w-md mx-auto">
             <CardContent className="pt-6">
-              <div className="flex flex-col items-center justify-center gap-4 p-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">Loading email accounts...</p>
+              <div className="flex flex-col items-center justify-center gap-4 p-8 w-full">
+                <div className="w-16 h-16 rounded-2xl bg-gray-100 animate-pulse mb-2" />
+                <div className="h-6 w-2/3 rounded bg-gray-100 animate-pulse mb-2" />
+                <div className="h-4 w-1/2 rounded bg-gray-100 animate-pulse mb-4" />
+                <div className="h-12 w-full rounded-xl bg-gray-100 animate-pulse mb-2" />
+                <div className="h-12 w-full rounded-xl bg-gray-100 animate-pulse mb-2" />
               </div>
             </CardContent>
           </Card>
@@ -459,14 +544,8 @@ export function EmailGenerator() {
           <Card className="shadow-none border-none">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center justify-center gap-6 p-8 animate-fadein">
-                {/* Provider logo placeholder - replace with actual logo SVG as needed */}
-                <div className="mb-2">
-                  {/* TODO: Replace this SVG with the actual provider logo (Google/Outlook) as needed */}
-                  <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="mx-auto">
-                    <rect width="56" height="56" rx="16" fill="#F3F4F6" />
-                    <text x="50%" y="54%" textAnchor="middle" fill="#888" fontSize="24" fontFamily="Inter, sans-serif" dy=".3em">@</text>
-                  </svg>
-                </div>
+                {/* Animated typing email replaces static SVG */}
+                <TypingEmailAnimation />
                 <div className="text-center space-y-2">
                   <h3 className="text-xl font-semibold">Connect Your Email</h3>
                   <p className="text-sm text-muted-foreground">
@@ -543,18 +622,6 @@ export function EmailGenerator() {
                   </button>
                 </div>
               </div>
-              <style jsx>{`
-                .animate-fadein {
-                  animation: fadein 0.7s cubic-bezier(0.4,0,0.2,1);
-                }
-                .animate-fadein.delay-100 {
-                  animation-delay: 0.1s;
-                }
-                @keyframes fadein {
-                  from { opacity: 0; transform: translateY(16px); }
-                  to { opacity: 1; transform: none; }
-                }
-              `}</style>
             </CardContent>
           </Card>
         ) : !generated ? (
@@ -862,16 +929,6 @@ export function EmailGenerator() {
                         )}
                       </div>
                     </Button>
-                    <style jsx global>{`
-                      @keyframes fadeIn {
-                        from { opacity: 0; transform: translateY(-3px); }
-                        to { opacity: 1; transform: translateY(0); }
-                      }
-                      .animate-fadeIn {
-                        animation: fadeIn 0.3s ease-out forwards;
-                      }
-                    `}</style>
-                    
                     <div className="rounded-md bg-muted p-3 mt-2">
                       <div className="flex items-center gap-2 text-sm">
                         <Sparkles className="h-4 w-4 text-pink-500 flex-shrink-0" />
@@ -888,6 +945,37 @@ export function EmailGenerator() {
           </div>
         )}
       </div>
+      <style jsx global>{`
+        .animate-fadein {
+          animation: fadein 0.7s cubic-bezier(0.4,0,0.2,1);
+        }
+        .animate-fadein.delay-100 {
+          animation-delay: 0.1s;
+        }
+        @keyframes fadein {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: none; }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-3px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+        .animate-blink::after {
+          content: '|';
+          margin-left: 1px;
+          animation: blink 1s step-end infinite;
+          display: inline-block;
+          position: relative;
+          font-weight: 400;
+        }
+        @keyframes blink {
+          from, to { opacity: 1; }
+          50% { opacity: 0; }
+        }
+      `}</style>
     </div>
   )
 }
