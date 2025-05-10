@@ -55,7 +55,9 @@ export async function middleware(request: NextRequest) {
     // Define protected routes
     const isProtectedRoute = 
       request.nextUrl.pathname.startsWith('/email-generator') ||
-      request.nextUrl.pathname.startsWith('/settings');
+      request.nextUrl.pathname.startsWith('/settings') ||
+      request.nextUrl.pathname.startsWith('/dashboard') ||
+      request.nextUrl.pathname.startsWith('/profile');
 
     if (isProtectedRoute) {
       if (!session) {
@@ -65,9 +67,9 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(redirectUrl);
       }
 
-      // Check if the session is from Google OAuth
+      // Check if the session is from OAuth (Google or Microsoft)
       if (session.provider_token) {
-        console.log('Valid Google OAuth session found');
+        console.log('Valid OAuth session found');
         return response;
       }
 

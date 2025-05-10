@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from 'lucide-react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Button } from "@/components/ui/button"
@@ -11,17 +11,28 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { GoogleButton } from "./google-button"
 import { MicrosoftSignIn } from "./MicrosoftSignIn"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export function SignInForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
+
+  useEffect(() => {
+    const error = searchParams.get('error')
+    if (error) {
+      setError(decodeURIComponent(error))
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError(null)
     
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -35,8 +46,9 @@ export function SignInForm() {
 
       router.push("/")
       router.refresh()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing in:', error)
+      setError(error.message || 'Failed to sign in')
     } finally {
       setIsLoading(false)
     }
@@ -46,6 +58,11 @@ export function SignInForm() {
     <Card className="w-full shadow-sm border-gray-200 animate-slide-up">
       <form onSubmit={handleSubmit} suppressHydrationWarning>
         <CardContent className="pt-6 space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input 

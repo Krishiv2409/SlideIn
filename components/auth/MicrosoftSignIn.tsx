@@ -16,8 +16,15 @@ export function MicrosoftSignIn() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'azure',
         options: {
-          scopes: 'email profile',
-          redirectTo: `${window.location.origin}/auth/callback`,
+          scopes: [
+            'email',
+            'profile',
+            'offline_access',
+            'https://graph.microsoft.com/User.Read',
+            'https://graph.microsoft.com/Mail.Send',
+            'https://graph.microsoft.com/Mail.ReadWrite'
+          ].join(' '),
+          redirectTo: `${window.location.origin}/api/microsoft-auth/callback`,
         },
       });
 

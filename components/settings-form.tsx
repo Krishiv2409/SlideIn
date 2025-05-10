@@ -496,11 +496,34 @@ export function SettingsForm() {
                   <Button 
                     className="w-full" 
                     variant="outline"
-                    disabled
+                    onClick={async () => {
+                      try {
+                        const { error } = await supabase.auth.signInWithOAuth({
+                          provider: 'azure',
+                          options: {
+                            scopes: [
+                              'email',
+                              'profile',
+                              'offline_access',
+                              'https://graph.microsoft.com/User.Read',
+                              'https://graph.microsoft.com/Mail.Send',
+                              'https://graph.microsoft.com/Mail.ReadWrite'
+                            ].join(' '),
+                            redirectTo: `${window.location.origin}/api/microsoft-auth/callback`,
+                          },
+                        });
+
+                        if (error) {
+                          throw error;
+                        }
+                      } catch (error) {
+                        console.error('Error connecting Outlook:', error);
+                        toast.error('Failed to connect Outlook. Please try again.');
+                      }
+                    }}
                   >
                     <Mail className="mr-2 h-4 w-4" />
                     Connect Outlook
-                    <span className="ml-2 text-xs text-muted-foreground">(Coming soon)</span>
                   </Button>
                 </div>
               </CardContent>
