@@ -4,25 +4,42 @@ import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Loader2 } from 'lucide-react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { GoogleButton } from "./google-button"
+import { MicrosoftSignIn } from "./MicrosoftSignIn"
 
 export function SignInForm() {
   const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const router = useRouter()
+  const supabase = createClientComponentClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     
-    // Simulate authentication
-    setTimeout(() => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        throw error
+      }
+
+      router.push("/")
+      router.refresh()
+    } catch (error) {
+      console.error('Error signing in:', error)
+    } finally {
       setIsLoading(false)
-      router.push("/") // Redirect to dashboard after sign in
-    }, 1500)
+    }
   }
 
   return (
@@ -36,6 +53,8 @@ export function SignInForm() {
               type="email" 
               placeholder="you@example.com" 
               required 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="transition-all focus-visible:ring-pink-500"
               suppressHydrationWarning
             />
@@ -55,6 +74,8 @@ export function SignInForm() {
               type="password" 
               placeholder="••••••••" 
               required 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="transition-all focus-visible:ring-pink-500"
               suppressHydrationWarning
             />
@@ -86,7 +107,10 @@ export function SignInForm() {
               </span>
             </div>
           </div>
-          <GoogleButton />
+          <div className="grid grid-cols-2 gap-4">
+            <GoogleButton />
+            <MicrosoftSignIn />
+          </div>
           <p className="text-sm text-center text-muted-foreground">
             Don't have an account?{" "}
             <Link 
