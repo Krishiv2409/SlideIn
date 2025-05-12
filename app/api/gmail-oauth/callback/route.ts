@@ -41,31 +41,7 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(`${baseUrl}/settings?error=no_supabase_user`);
 
-  // Ensure this user exists in the public.users table
-  const { data: publicUser, error: publicUserError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-    
-  if (publicUserError || !publicUser) {
-    console.log('Syncing auth user to public users table for Gmail OAuth');
-    // Insert user into public.users table if they don't exist there
-    const { error: insertError } = await supabase
-      .from('users')
-      .insert({
-        id: user.id,
-        email: user.email,
-        name: userInfo.name || null,
-        provider: 'google',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-
-    if (insertError) {
-      console.error('Error syncing user to public users table:', insertError);
-    }
-  }
+  // No need to manually sync user data - the database trigger handles this automatically
 
   // Check if this email already exists for this user
   const { data: existingAccount, error: queryError } = await supabase

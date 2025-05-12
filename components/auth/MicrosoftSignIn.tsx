@@ -1,14 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@/utils/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Icons } from '@/components/icons';
 import { Loader2 } from 'lucide-react';
 
 export function MicrosoftSignIn() {
   const [isLoading, setIsLoading] = useState(false);
-  const supabase = createClientComponentClient();
+  const supabase = createClient();
 
   const handleMicrosoftSignIn = async () => {
     try {
@@ -42,13 +42,13 @@ export function MicrosoftSignIn() {
     <Button
       variant="outline"
       onClick={handleMicrosoftSignIn}
-      className="w-full"
+      className="w-full flex items-center justify-center gap-2"
       disabled={isLoading}
     >
       {isLoading ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <Loader2 className="h-5 w-5 animate-spin" />
       ) : (
-        <Icons.microsoft className="mr-2 h-4 w-4" />
+        <Icons.microsoft className="h-5 w-5" />
       )}
       Sign in with Microsoft
     </Button>

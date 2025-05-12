@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from 'lucide-react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createClient } from '@/utils/supabase/client'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,7 +20,7 @@ export function SignInForm() {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClientComponentClient()
+  const supabase = createClient()
 
   useEffect(() => {
     const error = searchParams.get('error')
@@ -114,7 +114,7 @@ export function SignInForm() {
               "Sign in"
             )}
           </Button>
-          <div className="relative">
+          <div className="relative w-full">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t" />
             </div>
@@ -124,7 +124,7 @@ export function SignInForm() {
               </span>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col space-y-3 w-full">
             <GoogleButton />
             <MicrosoftSignIn />
           </div>

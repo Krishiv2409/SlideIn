@@ -17,8 +17,8 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 // Time window in milliseconds to consider duplicate opens (5 seconds)
 const DUPLICATE_OPEN_WINDOW_MS = 5000
 
-// Minimum time in milliseconds after an email is sent before we consider an open legitimate (30 seconds)
-const MIN_TIME_AFTER_SEND_MS = 5000
+// Minimum time in milliseconds after an email is sent before we consider an open legitimate (3 seconds)
+const MIN_TIME_AFTER_SEND_MS = 3000
 
 Deno.serve(async (req) => {
   const startTime = new Date().toISOString()

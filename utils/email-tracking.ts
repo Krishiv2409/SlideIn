@@ -35,30 +35,8 @@ export async function createEmailTrackingEvent(
       console.log('User found:', user.id);
       userId = user.id;
       
-      // Ensure this user exists in the public.users table
-      const { data: publicUser, error: publicUserError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-        
-      if (publicUserError || !publicUser) {
-        console.log('Syncing auth user to public users table for email tracking');
-        // Insert user into public.users table if they don't exist there
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert({
-            id: user.id,
-            email: user.email,
-            provider: 'auth',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-
-        if (insertError) {
-          console.error('Error syncing user to public users table:', insertError);
-        }
-      }
+      // The auth.users and public.profiles tables are now kept in sync through database triggers
+      // No need to manually sync data here
     } else {
       // Handle auth errors by falling back to anonymous tracking
       if (authError) {
