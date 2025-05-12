@@ -1,6 +1,6 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { createClient } from '@/utils/supabase/server'
+import { cookies } from 'next/headers'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -16,9 +16,24 @@ export async function GET(request: Request) {
   }
 
   if (code) {
-    const supabase = createRouteHandlerClient({ cookies })
+    const cookieStore = cookies()
+    const supabase = await createClient()(cookieStore)
+    
     try {
-      await supabase.auth.exchangeCodeForSession(code)
+      // Exchange the auth code for a session
+      const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code)
+      
+      if (sessionError) {
+        console.error('Error exchanging code for session:', sessionError)
+        return NextResponse.redirect(
+          new URL('/sign-in?error=Failed to authenticate', requestUrl.origin)
+        )
+      }
+      
+      console.log('Authentication successful, session created:', !!data.session)
+      
+      // The profile table is automatically managed by the database trigger
+      // No need to manually sync user data here
     } catch (error) {
       console.error('Error exchanging code for session:', error)
       return NextResponse.redirect(

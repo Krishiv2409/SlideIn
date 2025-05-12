@@ -22,6 +22,7 @@ import {
 import { GmailConnectButton } from './gmail-connect-button'
 import { createBrowserClient } from "@supabase/ssr"
 import { toast } from "sonner"
+import { Switch } from "@/components/ui/switch"
 
 const tones = [
   {
@@ -169,6 +170,7 @@ export function EmailGenerator() {
   const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([])
   const [selectedAccount, setSelectedAccount] = useState<string>('')
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true)
+  const [trackingEnabled, setTrackingEnabled] = useState(true)
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -441,6 +443,8 @@ export function EmailGenerator() {
   };
 
   const handleSend = async () => {
+    console.log('handleSend called, trackingEnabled:', trackingEnabled);
+    
     if (!recipientEmail) {
       toast.error("Please enter a recipient email address");
       return;
@@ -458,20 +462,26 @@ export function EmailGenerator() {
       setSendStatus('idle');
       
       try {
+        const requestBody = {
+          to: recipientEmail,
+          subject,
+          html: emailBody.replace(/\n/g, '<br>'),
+          gmailTokens,
+          trackingEnabled
+        };
+        
+        console.log('Sending email request with trackingEnabled:', trackingEnabled);
+        
         const response = await fetch('/api/send-email', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            to: recipientEmail,
-            subject,
-            html: emailBody.replace(/\n/g, '<br>'),
-            gmailTokens
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         const responseData = await response.json();
+        console.log('Email send response:', responseData);
 
         if (!response.ok) {
           // Check if token was refreshed
@@ -491,7 +501,16 @@ export function EmailGenerator() {
         }
 
         setSendStatus('success');
-        toast.success("Email sent successfully! 🎉");
+        
+        // Customize success message based on tracking
+        console.log('Response received - trackingEnabled:', trackingEnabled, 'emailId:', responseData.emailId);
+        if (trackingEnabled && responseData.emailId) {
+          console.log('Showing tracking success message');
+          toast.success("Email sent with tracking enabled! 🎉");
+        } else {
+          console.log('Showing general success message');
+          toast.success("Email sent successfully! 🎉");
+        }
         
         // Reset the send status after 2 seconds
         setTimeout(() => {
@@ -898,6 +917,23 @@ export function EmailGenerator() {
                           </div>
                         </TabsContent>
                       </Tabs>
+                    </div>
+                    <div className="flex items-center justify-between space-x-2">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="tracking"
+                          checked={trackingEnabled}
+                          onCheckedChange={setTrackingEnabled}
+                        />
+                        <Label htmlFor="tracking" className="text-sm text-gray-700 cursor-pointer">
+                          Enable email tracking
+                        </Label>
+                      </div>
+                      {trackingEnabled && (
+                        <span className="text-xs text-gray-500 italic">
+                          You'll know when your email is opened
+                        </span>
+                      )}
                     </div>
                     <Button 
                       onClick={handleSend} 

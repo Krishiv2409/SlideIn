@@ -70,6 +70,36 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${requestUrl.origin}/sign-in?error=no_user_email`)
     }
 
+    // Ensure the user is properly synced to public.users table
+    try {
+      const { data: publicUser, error: publicUserError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (publicUserError || !publicUser) {
+        console.log('Syncing auth user to public users table');
+        // Insert user into public.users table if they don't exist there
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: user.id,
+            email: user.email,
+            name: user.user_metadata?.name || user.user_metadata?.full_name || null,
+            provider: 'google',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (insertError) {
+          console.error('Error syncing user to public users table:', insertError);
+        }
+      }
+    } catch (syncError) {
+      console.error('Error during user sync:', syncError);
+    }
+
     // Check if this is the first account for this user
     const { data: existingAccounts, error: countError } = await supabase
       .from('email_accounts')

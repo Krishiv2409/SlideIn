@@ -1,104 +1,8 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextRequest } from 'next/server'
+import { updateSession } from '@/utils/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          // Ensure cookies are set with proper options
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
-            path: '/',
-          });
-        },
-        remove(name: string, options: CookieOptions) {
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
-            path: '/',
-            maxAge: 0,
-          });
-        },
-      },
-    }
-  );
-
-  try {
-    // Refresh session if expired - required for Server Components
-    const { data: { session }, error } = await supabase.auth.getSession();
-    
-    console.log('Middleware session check:', { 
-      hasSession: !!session, 
-      error: error?.message,
-      path: request.nextUrl.pathname 
-    });
-
-    // Define protected routes
-    const isProtectedRoute = 
-      request.nextUrl.pathname.startsWith('/email-generator') ||
-      request.nextUrl.pathname.startsWith('/settings') ||
-      request.nextUrl.pathname.startsWith('/dashboard') ||
-      request.nextUrl.pathname.startsWith('/profile');
-
-    if (isProtectedRoute) {
-      if (!session) {
-        console.log('No session found, redirecting to sign-in');
-        const redirectUrl = new URL('/sign-in', request.url);
-        redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname);
-        return NextResponse.redirect(redirectUrl);
-      }
-
-      // Check if the session is from OAuth (Google or Microsoft)
-      if (session.provider_token) {
-        console.log('Valid OAuth session found');
-        return response;
-      }
-
-      // If we have a session but no provider token, we might need to refresh
-      try {
-        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError || !refreshedSession) {
-          console.log('Failed to refresh session:', refreshError?.message);
-          const redirectUrl = new URL('/sign-in', request.url);
-          redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname);
-          return NextResponse.redirect(redirectUrl);
-        }
-        console.log('Session refreshed successfully');
-        return response;
-      } catch (refreshError) {
-        console.error('Error refreshing session:', refreshError);
-        const redirectUrl = new URL('/sign-in', request.url);
-        redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname);
-        return NextResponse.redirect(redirectUrl);
-      }
-    }
-
-    return response;
-  } catch (error) {
-    console.error('Middleware error:', error);
-    const redirectUrl = new URL('/sign-in', request.url);
-    redirectUrl.searchParams.set('redirectedFrom', request.nextUrl.pathname);
-    return NextResponse.redirect(redirectUrl);
-  }
+  return await updateSession(request)
 }
 
 export const config = {
@@ -112,4 +16,4 @@ export const config = {
      */
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
-}; 
+} 

@@ -1,18 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Button } from "@/components/ui/button"
 import { FcGoogle } from "react-icons/fc"
 import { Loader2 } from 'lucide-react'
+import { createClient } from '@/utils/supabase/client'
 
 export function GoogleButton() {
   const [isLoading, setIsLoading] = useState(false)
-  const supabase = createClientComponentClient()
-
+  
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true)
+      const supabase = createClient()
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -25,6 +26,7 @@ export function GoogleButton() {
       })
 
       if (error) {
+        console.error("Google sign in error:", error.message)
         throw error
       }
     } catch (error) {
