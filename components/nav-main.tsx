@@ -33,7 +33,11 @@ export function NavMain({ items, className }: NavMainProps) {
       <SidebarGroupContent>
         <SidebarMenu>
           {items.map((item) => {
-            const isActive = pathname === item.url
+            // Special case for Email Generator - active on both / and /email-generator
+            const isActive = item.url === '/email-generator' 
+              ? (pathname === '/' || pathname === '/email-generator')
+              : pathname === item.url
+            
             const Icon = item.icon
             
             return (

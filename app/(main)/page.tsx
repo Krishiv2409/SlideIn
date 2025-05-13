@@ -1,15 +1,13 @@
-import { EmailGenerator } from "@/components/email-generator"
+import { Suspense } from 'react';
+import { EmailGeneratorClient } from '@/components/email-generator-client';
+import { ContentWrapper } from '@/components/content-wrapper';
 
 export default function Home() {
   return (
-    <div className="flex justify-center w-full min-h-screen px-2 md:px-8 py-8">
-      <div className="w-full max-w-4xl">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-left">Email Generator 💌</h1>
-          <p className="text-muted-foreground text-left mt-2">Generate personalized cold emails from URLs with AI</p>
-        </div>
-        <EmailGenerator />
-      </div>
-    </div>
-  )
+    <ContentWrapper className="h-full">
+      <Suspense fallback={<div>Loading...</div>}>
+        <EmailGeneratorClient />
+      </Suspense>
+    </ContentWrapper>
+  );
 } 

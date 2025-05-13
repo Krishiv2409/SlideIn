@@ -1,4 +1,5 @@
 import { GmailTest } from '@/components/gmail-test';
+import { Suspense } from 'react';
 
 export default function GmailTestPage() {
   return (
@@ -11,7 +12,9 @@ export default function GmailTestPage() {
       </div>
       
       <div className="max-w-2xl mx-auto">
-        <GmailTest />
+        <Suspense fallback={<div>Loading...</div>}>
+          <GmailTest />
+        </Suspense>
       </div>
     </div>
   );
