@@ -180,6 +180,8 @@ export function EmailGenerator() {
   const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
   const successParam = searchParams.get('success');
 
+  const [initializing, setInitializing] = useState(false)
+
   // Function to load email accounts - extracted for reusability
   const loadEmailAccounts = async () => {
     if (!supabase) {
@@ -547,9 +549,27 @@ export function EmailGenerator() {
     window.location.href = '/api/gmail-oauth/start';
   };
 
+  // In the useEffect for initialization (modify your existing initialization code)
+  useEffect(() => {
+    // Combine your existing initialization logic
+    const initialize = async () => {
+      try {
+        await loadEmailAccounts();
+        // Add any other initialization you need
+      } catch (error) {
+        console.error('Error initializing email generator:', error);
+      } finally {
+        // Mark initialization as complete
+        setInitializing(false);
+      }
+    };
+    
+    initialize();
+  }, []);
+
   return (
-    <div className="w-full h-full flex flex-col justify-center items-center email-generator-container">
-      <div className="w-full max-w-5xl mx-auto h-full flex items-center justify-center bg-white rounded-2xl p-4 md:p-8 transition-all duration-300">
+    <div className="w-full mx-auto email-generator-container">
+      <div className="w-full max-w-2xl mx-auto bg-white rounded-2xl p-4 md:p-8 transition-all duration-300">
         {isLoadingAccounts ? (
           <Card className="shadow-none border-none w-full max-w-md mx-auto">
             <CardContent className="pt-6">

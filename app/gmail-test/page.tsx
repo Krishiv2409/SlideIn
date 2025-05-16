@@ -1,5 +1,6 @@
 import { GmailTest } from '@/components/gmail-test';
 import { Suspense } from 'react';
+import TailwindSpinner from '@/components/ui/tailwind-spinner';
 
 export default function GmailTestPage() {
   return (
@@ -12,7 +13,10 @@ export default function GmailTestPage() {
       </div>
       
       <div className="max-w-2xl mx-auto">
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense 
+          fallback={<TailwindSpinner />}
+          key="gmail-test-suspense"
+        >
           <GmailTest />
         </Suspense>
       </div>

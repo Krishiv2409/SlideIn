@@ -4,6 +4,7 @@ import { useUser } from "@/components/providers/user-provider"
 import { createClient } from "@/utils/supabase/client"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import TailwindSpinner from "@/components/ui/tailwind-spinner"
 
 export default function DashboardPage() {
   const { user, loading } = useUser()
@@ -16,7 +17,7 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return <div>Loading...</div>
+    return <TailwindSpinner />
   }
 
   if (!user) {

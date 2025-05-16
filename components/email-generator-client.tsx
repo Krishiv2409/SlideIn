@@ -8,12 +8,11 @@ import { EmailGenerator } from '@/components/email-generator';
 export function EmailGeneratorClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isInitializing, setIsInitializing] = useState(true);
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -32,9 +31,6 @@ export function EmailGeneratorClient() {
           return;
         }
 
-        // We have a valid session
-        setLoading(false);
-
         // Set up auth state change listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
           if (event === 'SIGNED_OUT' || !session) {
@@ -42,6 +38,7 @@ export function EmailGeneratorClient() {
           }
         });
 
+        setIsInitializing(false);
         return () => {
           subscription.unsubscribe();
         };
@@ -54,9 +51,6 @@ export function EmailGeneratorClient() {
     checkSession();
   }, [router, supabase]);
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
+  // Directly render EmailGenerator, which will handle its own loading states
   return <EmailGenerator />;
 } 

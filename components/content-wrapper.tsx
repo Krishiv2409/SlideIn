@@ -23,10 +23,12 @@ export function ContentWrapper({ children, className = "" }: ContentWrapperProps
   
   return (
     <div 
-      className={`w-full transition-all duration-300 ${containerClass} ${className}`}
+      className={`w-full flex flex-col items-center justify-center transition-all duration-300 ${containerClass} ${className}`}
       data-sidebar-state={state}
     >
-      {children}
+      <div className="w-full max-w-4xl mx-auto transition-none">
+        {children}
+      </div>
     </div>
   )
 }
