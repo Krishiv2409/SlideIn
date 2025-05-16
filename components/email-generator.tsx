@@ -569,7 +569,7 @@ export function EmailGenerator() {
 
   return (
     <div className="w-full mx-auto email-generator-container">
-      <div className="w-full max-w-2xl mx-auto bg-white rounded-2xl p-4 md:p-8 transition-all duration-300">
+      <div className={`w-full mx-auto bg-white rounded-2xl p-4 md:p-8 transition-all duration-300 ${generated ? 'max-w-7xl' : 'max-w-2xl'}`}>
         {isLoadingAccounts ? (
           <Card className="shadow-none border-none w-full max-w-md mx-auto">
             <CardContent className="pt-6">
@@ -784,7 +784,7 @@ export function EmailGenerator() {
             </CardContent>
           </Card>
         ) : (
-          <div className="w-full grid gap-6 md:grid-cols-2 transition-all duration-300">
+          <div className="w-full grid gap-3 md:grid-cols-[minmax(500px,1fr),minmax(400px,1fr)] transition-all duration-300">
             <Card className="md:col-span-1 shadow-none border-none">
               <CardContent className="pt-6">
                 <div className="space-y-4">

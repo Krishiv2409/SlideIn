@@ -11,8 +11,8 @@ export default function EmailGeneratorLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="w-full h-full flex justify-center px-4 py-8">
-      <div className="max-w-4xl w-full">
+    <div className="w-full h-full flex flex-col items-center justify-center px-4 py-8">
+      <div className="w-full max-w-[1280px] mx-auto">
         {children}
       </div>
     </div>

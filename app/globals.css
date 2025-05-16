@@ -159,26 +159,23 @@ body[data-sidebar-state="collapsed"] [data-sidebar="menu-button"] {
   transition: all 0.3s ease;
 }
 
-/* Center skeleton within content area from the start */
+/* Ensure consistent centering for all container widths */
 .email-generator-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-}
-
-/* Ensure consistent max-width and centering */
-.email-generator-container > div,
-.email-generator-container > .max-w-4xl {
+  max-width: 100%;
   margin-left: auto !important;
   margin-right: auto !important;
-  position: relative; 
-  left: 0 !important;
+}
+
+/* Ensure the inner container stays centered */
+.email-generator-container > div {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100%;
 }
 
 /* Inbox tracker container with dynamic centering */
@@ -270,6 +267,33 @@ body[data-sidebar-state="collapsed"] [data-sidebar="menu-button"] {
 /* Add specific positioning for collapsed state */
 [data-sidebar-state="collapsed"] .inbox-tracker-container table {
   margin-left: 0;
+}
+
+/* Styling for email editing view */
+.email-generator-container .grid.md\:grid-cols-\[minmax\(500px\,1fr\)\,minmax\(400px\,1fr\)\] {
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Give more space to the email editing side and reduce column gap */
+@media (min-width: 768px) {
+  .email-generator-container .grid.md\:grid-cols-\[minmax\(500px\,1fr\)\,minmax\(400px\,1fr\)\] > *:first-child {
+    padding-right: 0.5rem;
+  }
+  
+  .email-generator-container .grid.md\:grid-cols-\[minmax\(500px\,1fr\)\,minmax\(400px\,1fr\)\] > *:last-child {
+    padding-left: 0.5rem;
+  }
+  
+  /* Make the email textarea taller */
+  .email-generator-container textarea[id="body"] {
+    min-height: 320px;
+  }
+}
+
+/* Ensure card containers fill available space */
+.email-generator-container .card {
+  height: 100%;
 }
 
 
