@@ -23,27 +23,32 @@ import { GmailConnectButton } from './gmail-connect-button'
 import { createBrowserClient } from "@supabase/ssr"
 import { toast } from "sonner"
 import { Switch } from "@/components/ui/switch"
+import { Emoji } from "react-apple-emojis"
 
 const tones = [
   {
     id: "polite",
-    label: "📚 Polite Genius",
-    description: "Formal and respectful",
+    label: "Polite Genius",
+    emoji: "nerd-face",
+    description: "Keep it formal and respectful. Sharp, but never too loud.",
   },
   {
     id: "professional",
-    label: "💼 Professional Hustler",
-    description: "Confident and business-like",
+    label: "Corporate Hustler",
+    emoji: "necktie",
+    description: "Built for business. Confident, clear, and just dialed in",
   },
   {
     id: "chill",
-    label: "💌 Chill & Curious",
-    description: "Casual and inquisitive",
+    label: "Chill & Curious",
+    emoji: "call-me-hand",
+    description: "Easygoing tone with thoughtful questions",
   },
   {
     id: "bold",
-    label: "🔥 Bold + Direct",
-    description: "Straight to the point",
+    label: "Bold + Direct",
+    emoji: "fire",
+    description: "For the straight shooters. No BS.",
   },
 ]
 
@@ -755,12 +760,14 @@ export function EmailGenerator() {
                         <Label
                           htmlFor={t.id}
                           className={cn(
-                            "flex cursor-pointer flex-col justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-500 [&:has([data-state=checked])]:border-pink-500",
+                            "flex cursor-pointer flex-col justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-pink-500 [&:has([data-state=checked])]:border-pink-500 h-[120px]",
                             tone === t.id && "border-pink-500",
                           )}
                         >
                           <div className="flex flex-col space-y-1">
-                            <span className="text-base">{t.label}</span>
+                            <span className="text-base flex items-center">
+                              <Emoji name={t.emoji} width={20} className="mr-2" /> {t.label}
+                            </span>
                             <span className="text-sm font-normal text-muted-foreground">{t.description}</span>
                           </div>
                         </Label>

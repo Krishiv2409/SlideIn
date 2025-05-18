@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Apple Emoji styling */
+.apple-emoji {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-style: normal;
+  font-size: 1.2em;
+  line-height: 1;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.1em;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
