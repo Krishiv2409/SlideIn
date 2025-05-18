@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { GoogleButton } from "./google-button"
 import { MicrosoftSignIn } from "./MicrosoftSignIn"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import Image from "next/image"
 
 export function SignInForm() {
   const [isLoading, setIsLoading] = useState(false)
@@ -57,6 +58,20 @@ export function SignInForm() {
   return (
     <Card className="w-full shadow-sm border-gray-200 animate-slide-up">
       <form onSubmit={handleSubmit} suppressHydrationWarning>
+        <div className="flex flex-col items-center pt-8 mb-2">
+          <Image 
+            src="/plane-logo.svg" 
+            alt="SlideIn Logo" 
+            width={90} 
+            height={90}
+            className="mb-2" 
+          />
+          <div className="text-center w-full">
+            <h1 className="text-2xl font-bold" style={{ fontFamily: 'Satoshi, sans-serif', fontWeight: 700 }}>Welcome back</h1>
+            <p className="text-muted-foreground text-base" style={{ fontFamily: 'Satoshi, sans-serif' }}>Sign in to continue to SlideIn</p>
+          </div>
+        </div>
+
         <CardContent className="pt-6 space-y-4">
           {error && (
             <Alert variant="destructive">

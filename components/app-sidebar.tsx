@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
+import Image from "next/image"
 import { 
   BarChart3, 
   Mail, 
@@ -29,6 +30,7 @@ import { NavUser } from "./nav-user"
 import { NavMain } from "./nav-main"
 import { NavSecondary } from "./nav-secondary"
 import { NavDocuments } from "./nav-documents"
+import { NavLogo } from "./nav-logo"
 import { createClient } from "@/utils/supabase/client"
 import { Button } from "./ui/button"
 
@@ -123,33 +125,39 @@ export function AppSidebar({
         title: "Profile",
         url: "/profile",
         icon: User,
+        comingSoon: true
       },
       {
         title: "Help",
         url: "/help",
         icon: HelpCircle,
+        comingSoon: true
       },
       {
         title: "Search",
         url: "/search",
         icon: Search,
+        comingSoon: true
       },
     ],
     documents: [
       {
         name: "Emails",
         url: "/emails",
-        icon: Mail,
+        icon: Inbox,
+        comingSoon: true
       },
       {
         name: "Reports",
         url: "/reports",
         icon: BarChart3,
+        comingSoon: true
       },
       {
         name: "Drafts",
         url: "/drafts",
-        icon: Inbox,
+        icon: Mail,
+        comingSoon: true
       },
     ],
   }
@@ -161,11 +169,11 @@ export function AppSidebar({
       className={className || ''}
     >
       <SidebarHeader className="border-b border-border">
-        <div className="flex h-14 items-center justify-center">
+        <div className="flex h-14 items-center px-3">
           <Button 
             variant="ghost" 
             size="icon" 
-            className="h-10 w-10 flex items-center justify-center hover:bg-accent"
+            className={`h-10 w-10 flex items-center justify-center hover:bg-accent ${state === "collapsed" ? "mx-auto" : ""}`}
             onClick={toggleSidebar}
           >
             <Menu className="h-6 w-6" />
@@ -173,8 +181,20 @@ export function AppSidebar({
           </Button>
           
           {state !== "collapsed" && (
-            <div className="ml-2 flex-1">
-              <span className="text-base font-semibold">SlideIn</span>
+            <div className="ml-2 flex-1 flex items-center">
+              <Link href="/email-generator">
+                <Image
+                  src="/plane-logo.svg"
+                  alt="SlideIn Logo"
+                  width={26}
+                  height={26}
+                />
+              </Link>
+              <img 
+                src="/logo-text.svg" 
+                alt="SlideIn" 
+                className="ml-2 h-4"
+              />
             </div>
           )}
         </div>

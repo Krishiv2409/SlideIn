@@ -13,6 +13,7 @@ interface SendEmailRequest {
     expiry_date: number;
   };
   trackingEnabled?: boolean;
+  userId?: string;
 }
 
 export async function POST(request: Request) {
@@ -20,14 +21,15 @@ export async function POST(request: Request) {
   
   try {
     const body = await request.json();
-    const { to, subject, html, gmailTokens, trackingEnabled = false } = body as SendEmailRequest;
+    const { to, subject, html, gmailTokens, trackingEnabled = false, userId } = body as SendEmailRequest;
     
     console.log('Request body received:', { 
       to, 
       subject, 
       htmlLength: html?.length, 
       tokensPresent: !!gmailTokens, 
-      trackingEnabled 
+      trackingEnabled,
+      hasUserId: !!userId
     });
 
     if (!to || !subject || !html || !gmailTokens) {
@@ -68,8 +70,8 @@ export async function POST(request: Request) {
     if (trackingEnabled) {
       console.log('Tracking is enabled, adding tracking pixel');
       try {
-        // Create a tracking event and get tracking pixel
-        const trackingResult = await createEmailTrackingEvent(to, subject);
+        // Create a tracking event and get tracking pixel, passing userId
+        const trackingResult = await createEmailTrackingEvent(to, subject, userId);
         emailId = trackingResult.emailId;
         
         console.log('Tracking event created with ID:', emailId);

@@ -17,6 +17,7 @@ interface NavItem {
   title: string
   url: string
   icon: LucideIcon
+  comingSoon?: boolean
 }
 
 interface NavSecondaryProps {
@@ -41,12 +42,23 @@ export function NavSecondary({ items, className }: NavSecondaryProps) {
                 <SidebarMenuButton 
                   asChild 
                   isActive={isActive}
-                  tooltip={item.title}
+                  tooltip={item.comingSoon ? `${item.title} (Coming Soon)` : item.title}
                   className="rounded-lg"
                 >
-                  <Link href={item.url}>
+                  <Link 
+                    href={item.comingSoon ? "#" : item.url}
+                    onClick={item.comingSoon ? (e) => e.preventDefault() : undefined}
+                    className={item.comingSoon ? "cursor-default opacity-70" : ""}
+                  >
                     <Icon className="h-4 w-4" />
-                    <span>{item.title}</span>
+                    <span className="flex items-center gap-2">
+                      {item.title}
+                      {item.comingSoon && state !== "collapsed" && (
+                        <span className="ml-1 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                          Soon
+                        </span>
+                      )}
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

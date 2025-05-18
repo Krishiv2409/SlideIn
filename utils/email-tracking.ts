@@ -5,45 +5,47 @@ import { createClient } from '@supabase/supabase-js'
  * 
  * @param recipientEmail The email address of the recipient
  * @param subject The subject of the email
+ * @param userId Optional user ID to associate with the tracking event
  * @returns The email_id to use in the tracking pixel and the tracking pixel HTML
  */
 export async function createEmailTrackingEvent(
   recipientEmail: string, 
-  subject: string
+  subject: string,
+  userId?: string
 ): Promise<{ 
   emailId: string, 
   trackingPixelHtml: string 
 }> {
-  console.log('createEmailTrackingEvent called with:', { recipientEmail, subject });
+  console.log('createEmailTrackingEvent called with:', { recipientEmail, subject, hasUserId: !!userId });
   
-  const supabase = createClient(
+  // Use the service role key for admin access to bypass RLS
+  // The service role is only used server-side in API routes
+  const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    // Use service role key for the server context to bypass RLS
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
   
   console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
 
   try {
-    // Get the current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    
-    // Initialize userId as null (for anonymous tracking)
-    let userId = null;
-    
-    // If there's no auth error and we have a user, use their ID
-    if (!authError && user) {
-      console.log('User found:', user.id);
-      userId = user.id;
+    // If userId wasn't provided, try to get from auth as fallback
+    if (!userId) {
+      const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser();
       
-      // The auth.users and public.profiles tables are now kept in sync through database triggers
-      // No need to manually sync data here
-    } else {
-      // Handle auth errors by falling back to anonymous tracking
-      if (authError) {
-        console.log('Auth error getting user, continuing with anonymous tracking:', authError.message);
+      if (!authError && user) {
+        console.log('User found from auth:', user.id);
+        userId = user.id;
       } else {
-        console.log('No authenticated user found. Creating anonymous tracking event.');
+        // Handle auth errors by falling back to anonymous tracking
+        if (authError) {
+          console.log('Auth error getting user, continuing with anonymous tracking:', authError.message);
+        } else {
+          console.log('No authenticated user found. Creating anonymous tracking event.');
+        }
       }
+    } else {
+      console.log('Using provided userId:', userId);
     }
 
     // Generate a UUID for the email
@@ -64,14 +66,14 @@ export async function createEmailTrackingEvent(
       opens: 0
     };
     
-    // Only add the user_id field if there is a logged-in user
+    // Only add the user_id field if there is a user ID available
     if (userId) {
       Object.assign(record, { user_id: userId });
     }
     
     console.log('Inserting record into email_events:', record);
     
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('email_events')
       .insert([record])
       .select()
@@ -85,19 +87,27 @@ export async function createEmailTrackingEvent(
 
     // Generate the tracking pixel HTML using edge function approach
     const edgeFunctionUrl = `https://ozzijihomyzoxodqpcin.functions.supabase.co/tracker?id=${emailId}`
-    console.log('Edge function URL for tracking pixel:', edgeFunctionUrl);
+    // Don't log the full URL to prevent false triggers
+    console.log('Edge function prepared for tracking ID:', emailId);
     
-    // Add cache-busting parameter and random UUID to prevent Gmail from caching
-    const cacheBustParam = `&t=${Date.now()}&r=${crypto.randomUUID()}`
+    // Add more cache-busting parameters to prevent Gmail from caching
+    // Include more randomness and the current timestamp in milliseconds
+    const timestamp = Date.now();
+    const randomId = crypto.randomUUID().replaceAll('-', '');
+    const cacheBustParam = `&t=${timestamp}&r=${randomId}&cb=${Math.random().toString(36).substring(2, 15)}`;
     
-    // Create the tracking pixel HTML
+    // Create the tracking pixel HTML with both an img tag and a background image for better coverage
     const trackingPixelHtml = `
 <!-- Email tracking pixel (transparent 1x1 image) -->
-<img src="${edgeFunctionUrl}${cacheBustParam}" width="1" height="1" alt="" style="display:block; position:absolute; left:-9999px; top:-9999px;" />
+<div style="display:block; position:absolute; left:-9999px; top:-9999px;">
+  <img src="${edgeFunctionUrl}${cacheBustParam}" width="1" height="1" alt="" style="display:block; width:1px; height:1px;" />
+  <div style="background-image:url('${edgeFunctionUrl}${cacheBustParam}&m=2');width:1px;height:1px;"></div>
+</div>
 
 <!-- Tracking ID: ${emailId} -->
 `
-    console.log('Generated tracking pixel HTML:', trackingPixelHtml);
+    // Don't log the HTML that contains the tracking URL
+    console.log('Tracking pixel HTML generated (not displayed to prevent false triggers)');
 
     return {
       emailId,
@@ -153,29 +163,29 @@ export async function getEmailTrackingStats() {
 
 /**
  * Adds a tracking pixel to an HTML email body
+ * Inserts the pixel only once in the most optimal location
  */
 export function addTrackingPixelToEmail(htmlBody: string, trackingPixelHtml: string): string {
-  console.log('Adding tracking pixel to email');
+  console.log('Adding tracking pixel to email (single insertion)');
   
-  // For Gmail compatibility, we need to insert the tracking pixel near the top of the email
-  // This is because Gmail clips messages at 102KB and may not load the pixel if at the end
+  // For Gmail compatibility, insert the tracking pixel in a single strategic location
+  let modifiedHtml = htmlBody;
   
-  // Insert after opening body tag if it exists
-  if (htmlBody.includes('<body')) {
+  // PRIORITY 1: Insert after opening body tag (most reliable for most email clients)
+  if (modifiedHtml.includes('<body')) {
     console.log('Email has body tag, inserting after <body>');
-    // Find where the body tag ends with >
-    const bodyTagEnd = htmlBody.indexOf('>', htmlBody.indexOf('<body')) + 1;
-    return htmlBody.slice(0, bodyTagEnd) + trackingPixelHtml + htmlBody.slice(bodyTagEnd);
+    const bodyTagEnd = modifiedHtml.indexOf('>', modifiedHtml.indexOf('<body')) + 1;
+    return modifiedHtml.slice(0, bodyTagEnd) + trackingPixelHtml + modifiedHtml.slice(bodyTagEnd);
   }
   
-  // If no body tag, try to insert after html tag
-  if (htmlBody.includes('<html')) {
-    console.log('Email has html tag, inserting after <html>');
-    const htmlTagEnd = htmlBody.indexOf('>', htmlBody.indexOf('<html')) + 1;
-    return htmlBody.slice(0, htmlTagEnd) + trackingPixelHtml + htmlBody.slice(htmlTagEnd);
+  // PRIORITY 2: If no body tag found, insert after opening html tag
+  if (modifiedHtml.includes('<html')) {
+    console.log('No body tag but has html tag, inserting after <html>');
+    const htmlTagEnd = modifiedHtml.indexOf('>', modifiedHtml.indexOf('<html')) + 1;
+    return modifiedHtml.slice(0, htmlTagEnd) + trackingPixelHtml + modifiedHtml.slice(htmlTagEnd);
   }
   
-  // If no html tag, insert at the beginning of the email
-  console.log('Email has no body or html tag, inserting at the beginning');
-  return trackingPixelHtml + htmlBody;
+  // PRIORITY 3: If no html or body tags found, insert at the beginning
+  console.log('No body or html tags, inserting at the beginning of email');
+  return trackingPixelHtml + modifiedHtml;
 } 

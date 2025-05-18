@@ -30,12 +30,16 @@ interface EmailEvent {
   last_opened: string | null
   sent_at: string
   starred?: boolean
+  false_positive_logs?: Array<{timestamp: string, seconds_after_send: number}>
 }
 
 const statusMap = {
   "Sent": { label: "Sent", color: "slate", icon: <Clock className="w-3.5 h-3.5 mr-1.5" /> },
   "Opened": { label: "Opened", color: "green", icon: <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> },
 }
+
+// Minimum time in seconds after email is sent to consider an open legitimate
+const MIN_TIME_AFTER_SEND_SECONDS = 5;
 
 export function InboxTracker() {
   const [activeTab, setActiveTab] = useState("all")
@@ -48,6 +52,38 @@ export function InboxTracker() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  // Helper function to determine if an email has legitimate opens (not false positives)
+  const hasLegitimateOpens = (email: EmailEvent): boolean => {
+    // If no opens recorded at all, return false
+    if (!email.opens || email.opens <= 0) return false;
+    
+    // If no last_opened timestamp, return false
+    if (!email.last_opened || !email.sent_at) return false;
+    
+    try {
+      // Calculate time difference between sent and last opened
+      const sentTime = new Date(email.sent_at).getTime();
+      const openedTime = new Date(email.last_opened).getTime();
+      const secondsAfterSend = Math.round((openedTime - sentTime) / 1000);
+      
+      // Only count opens that happened after the minimum time threshold
+      return secondsAfterSend >= MIN_TIME_AFTER_SEND_SECONDS;
+    } catch (error) {
+      console.error('Error calculating time difference:', error);
+      return false;
+    }
+  };
+  
+  // Function to get filtered/corrected opens count
+  const getLegitimateOpensCount = (email: EmailEvent): number => {
+    return hasLegitimateOpens(email) ? email.opens : 0;
+  };
+  
+  // Function to get effective status considering false positives
+  const getEffectiveStatus = (email: EmailEvent): 'Sent' | 'Opened' => {
+    return hasLegitimateOpens(email) ? 'Opened' : 'Sent';
+  };
 
   const fetchEmails = async () => {
     setIsLoading(true)
@@ -115,8 +151,8 @@ export function InboxTracker() {
   const filteredEmails = emails.filter((email) => {
     // First apply tab filtering
     let passesTabFilter = true;
-    if (activeTab === "opened") passesTabFilter = email.status === "Opened";
-    if (activeTab === "not-opened") passesTabFilter = email.status === "Sent";
+    if (activeTab === "opened") passesTabFilter = getEffectiveStatus(email) === "Opened";
+    if (activeTab === "not-opened") passesTabFilter = getEffectiveStatus(email) === "Sent";
     
     // Then apply search filtering
     let passesSearchFilter = true;
@@ -217,24 +253,24 @@ export function InboxTracker() {
                           <Badge 
                             variant="outline" 
                             className={`flex items-center py-1 px-2.5 text-xs font-medium rounded-full ${
-                              email.status === "Opened" 
+                              getEffectiveStatus(email) === "Opened" 
                                 ? "bg-green-50 text-green-700 border-green-200" 
                                 : "bg-slate-50 text-slate-700 border-slate-200"
                             }`}
                           >
-                            {statusMap[email.status]?.icon}
-                            {statusMap[email.status]?.label}
+                            {statusMap[getEffectiveStatus(email)]?.icon}
+                            {statusMap[getEffectiveStatus(email)]?.label}
                           </Badge>
                         </TableCell>
                         <TableCell className="py-4 px-6 text-center">
                           <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full text-xs font-semibold ${
-                            email.opens > 0 ? "bg-pink-50 text-pink-600" : "bg-gray-50 text-gray-500"
+                            getLegitimateOpensCount(email) > 0 ? "bg-pink-50 text-pink-600" : "bg-gray-50 text-gray-500"
                           }`}>
-                            {email.opens}
+                            {getLegitimateOpensCount(email)}
                           </span>
                         </TableCell>
                         <TableCell className="py-4 px-6 text-gray-500 text-sm">
-                          {email.last_opened ? formatSentDate(email.last_opened) : 'Not opened'}
+                          {hasLegitimateOpens(email) ? formatSentDate(email.last_opened!) : 'Not opened'}
                         </TableCell>
                         <TableCell className="py-4 px-6 text-gray-500 text-sm">{formatSentDate(email.sent_at)}</TableCell>
                         <TableCell className="py-4 px-6 text-right">

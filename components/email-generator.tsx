@@ -460,6 +460,11 @@ export function EmailGenerator() {
         return;
       }
       
+      // Get current user ID for tracking
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      console.log('Current user ID for tracking:', userId);
+      
       setIsSending(true);
       setSendStatus('idle');
       
@@ -469,7 +474,8 @@ export function EmailGenerator() {
           subject,
           html: emailBody.replace(/\n/g, '<br>'),
           gmailTokens,
-          trackingEnabled
+          trackingEnabled,
+          userId
         };
         
         console.log('Sending email request with trackingEnabled:', trackingEnabled);
@@ -798,7 +804,7 @@ export function EmailGenerator() {
                       id="body"
                       value={emailBody}
                       onChange={(e) => setEmailBody(e.target.value)}
-                      className="min-h-[300px]"
+                      className="min-h-[600px]"
                     />
                   </div>
                   <div className="flex justify-between">
