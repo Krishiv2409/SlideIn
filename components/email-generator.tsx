@@ -811,7 +811,7 @@ export function EmailGenerator() {
                       id="body"
                       value={emailBody}
                       onChange={(e) => setEmailBody(e.target.value)}
-                      className="min-h-[600px]"
+                      className="min-h-[450px]"
                     />
                   </div>
                   <div className="flex justify-between">

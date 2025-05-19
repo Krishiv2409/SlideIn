@@ -302,7 +302,7 @@ body[data-sidebar-state="collapsed"] [data-sidebar="menu-button"] {
   
   /* Make the email textarea taller */
   .email-generator-container textarea[id="body"] {
-    min-height: 600px;
+    min-height: 450px;
   }
 }
 
