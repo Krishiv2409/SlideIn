@@ -645,32 +645,21 @@ export async function POST(request: Request) {
     }
     
     // Get user from Supabase if userName isn't provided
-    if (!userName) {
+    if (!userName || userName.trim().toLowerCase() === 'user') {
       try {
         // Get the current authenticated user
         const { data: { user }, error } = await supabase.auth.getUser();
-        
         if (error) {
           console.error('Error getting user from Supabase:', error);
         } else if (user) {
-          console.log('User object:', JSON.stringify({
-            id: user.id,
-            email: user.email,
-            metadata: user.user_metadata,
-            app_metadata: user.app_metadata
-          }, null, 2));
-          
           // Try to get the name from user_metadata
-          if (user.user_metadata) {
-            userName = user.user_metadata.name || 
-                      user.user_metadata.full_name ||
-                      user.user_metadata.preferred_name ||
-                      user.user_metadata.display_name ||
-                      (user.user_metadata.first_name && user.user_metadata.last_name 
-                        ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-                        : user.user_metadata.first_name);
-          }
-          
+          userName = user.user_metadata?.name || 
+                    user.user_metadata?.full_name ||
+                    user.user_metadata?.preferred_name ||
+                    user.user_metadata?.display_name ||
+                    (user.user_metadata?.first_name && user.user_metadata?.last_name 
+                      ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+                      : user.user_metadata?.first_name);
           // If still no userName, try the profiles table as fallback
           if (!userName) {
             try {
@@ -679,12 +668,7 @@ export async function POST(request: Request) {
                 .select('full_name, display_name, first_name, last_name, email')
                 .eq('id', user.id)
                 .single();
-                
-              if (profileError) {
-                console.error('Error fetching user profile:', profileError);
-              } else if (profile) {
-                console.log('Found user profile:', profile);
-                // Try to get the name from the profile
+              if (!profileError && profile) {
                 userName = profile.full_name || 
                           profile.display_name || 
                           (profile.first_name && profile.last_name ? 
@@ -692,37 +676,21 @@ export async function POST(request: Request) {
                             profile.first_name);
               }
             } catch (err) {
-              console.error('Error accessing user profile:', err);
+              // Ignore
             }
           }
-          
           // If we still don't have a name, fall back to email or defaults
-          if (!userName) {
-            // Try to get name from email
-            if (user.email) {
-              const emailName = user.email.split('@')[0];
-              // Clean up email name (replace dots, underscores with spaces)
-              let cleanName = emailName.replace(/[._-]/g, ' ');
-              // Split into words and capitalize each
-              cleanName = cleanName.split(' ')
-                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-                .join(' ');
-                
-              userName = cleanName;
-            } else {
-              // Last resort default
-              userName = 'Me';
-            }
+          if (!userName && user.email) {
+            let cleanName = user.email.split('@')[0].replace(/[._-]/g, ' ');
+            cleanName = cleanName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+            userName = cleanName;
           }
-          
-          console.log('Final user name to use:', userName);
+          if (!userName) userName = 'Me';
         } else {
-          console.log('No user found in Supabase session');
-          userName = 'Me';  // Default fallback
+          userName = 'Me';
         }
       } catch (error) {
-        console.error('Error while getting user profile:', error);
-        userName = 'Me';  // Default fallback on error
+        userName = 'Me';
       }
     }
 

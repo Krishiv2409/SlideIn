@@ -53,36 +53,19 @@ export function InboxTracker() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Helper function to determine if an email has legitimate opens (not false positives)
+  // Only count opens after the first (ignore the first open)
   const hasLegitimateOpens = (email: EmailEvent): boolean => {
-    // If no opens recorded at all, return false
-    if (!email.opens || email.opens <= 0) return false;
-    
-    // If no last_opened timestamp, return false
-    if (!email.last_opened || !email.sent_at) return false;
-    
-    try {
-      // Calculate time difference between sent and last opened
-      const sentTime = new Date(email.sent_at).getTime();
-      const openedTime = new Date(email.last_opened).getTime();
-      const secondsAfterSend = Math.round((openedTime - sentTime) / 1000);
-      
-      // Only count opens that happened after the minimum time threshold
-      return secondsAfterSend >= MIN_TIME_AFTER_SEND_SECONDS;
-    } catch (error) {
-      console.error('Error calculating time difference:', error);
-      return false;
-    }
+    return email.opens > 1;
   };
   
   // Function to get filtered/corrected opens count
   const getLegitimateOpensCount = (email: EmailEvent): number => {
-    return hasLegitimateOpens(email) ? email.opens : 0;
+    return email.opens > 1 ? email.opens - 1 : 0;
   };
   
   // Function to get effective status considering false positives
   const getEffectiveStatus = (email: EmailEvent): 'Sent' | 'Opened' => {
-    return hasLegitimateOpens(email) ? 'Opened' : 'Sent';
+    return email.opens > 1 ? 'Opened' : 'Sent';
   };
 
   const fetchEmails = async () => {

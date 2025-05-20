@@ -410,7 +410,7 @@ export function EmailGenerator() {
           urlContent: url,
           goal: goal === 'other' ? customGoal : goal,
           tone: tone,
-          userName: userName || 'User',
+          userName: userName,
           recipientEmail: recipientEmail,
           url: url
         }),
@@ -576,6 +576,46 @@ export function EmailGenerator() {
     };
     
     initialize();
+  }, []);
+
+  useEffect(() => {
+    const fetchUserName = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
+        let name = '';
+        if (user) {
+          // Try user_metadata
+          name = user.user_metadata?.full_name ||
+                 user.user_metadata?.name ||
+                 user.user_metadata?.preferred_name ||
+                 user.user_metadata?.display_name ||
+                 (user.user_metadata?.first_name && user.user_metadata?.last_name
+                   ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+                   : user.user_metadata?.first_name) || '';
+          // Fallback to profiles table if still no name
+          if (!name) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name, display_name, first_name, last_name, email')
+              .eq('id', user.id)
+              .single();
+            if (profile) {
+              name = profile.full_name || profile.display_name || (profile.first_name && profile.last_name ? `${profile.first_name} ${profile.last_name}` : profile.first_name) || '';
+            }
+          }
+          // Fallback to email username
+          if (!name && user.email) {
+            name = user.email.split('@')[0].replace(/[._-]/g, ' ');
+          }
+          if (name) setUserName(name);
+        }
+      } catch (err) {
+        // Ignore errors, leave userName blank
+      }
+    };
+    fetchUserName();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -813,6 +853,13 @@ export function EmailGenerator() {
                       onChange={(e) => setEmailBody(e.target.value)}
                       className="min-h-[450px]"
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="resume-upload" className="text-sm font-medium text-gray-700">Attach Resume or File</Label>
+                    <div className="flex items-center gap-3">
+                      <input id="resume-upload" type="file" disabled className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 file:cursor-not-allowed" />
+                      <span className="text-xs text-gray-400 italic">Coming soon</span>
+                    </div>
                   </div>
                   <div className="flex justify-between">
                     <Button variant="outline" onClick={() => setGenerated(false)}>
