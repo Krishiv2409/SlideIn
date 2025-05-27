@@ -12,7 +12,6 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className
         )}
         ref={ref}
-        data-processed="true"
         {...props}
       />
     )

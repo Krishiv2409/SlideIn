@@ -1,0 +1,13 @@
+# This file is used to configure your Supabase project.
+# It's very minimal at the moment and uses default values.
+
+[functions]
+# Disable JWT verification for the tracker functions to allow public access
+[functions.tracker]
+verify_jwt = false
+
+[functions.test-tracker]
+verify_jwt = false
+
+[functions.public-tracker]
+verify_jwt = false 

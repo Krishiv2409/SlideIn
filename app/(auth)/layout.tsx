@@ -1,9 +1,7 @@
 import type { Metadata } from "next"
-import { Inter } from 'next/font/google'
 import "@/app/globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-
-const inter = Inter({ subsets: ["latin"] })
+import { inter } from "@/app/fonts"
 
 export const metadata: Metadata = {
   title: "Authentication - SlideIn",
@@ -16,14 +14,10 @@ export default function AuthLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <main className="min-h-screen flex items-center justify-center bg-gray-50">
-            {children}
-          </main>
-        </ThemeProvider>
-      </body>
-    </html>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+      <main className={`min-h-screen flex items-center justify-center py-12 bg-gradient-to-b from-white to-gray-100 ${inter.className}`}>
+        {children}
+      </main>
+    </ThemeProvider>
   )
 } 

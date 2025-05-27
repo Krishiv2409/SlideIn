@@ -1,15 +1,18 @@
-import { EmailGenerator } from "@/components/email-generator"
+import { Suspense } from 'react';
+import { EmailGeneratorClient } from '@/components/email-generator-client';
+import { ContentWrapper } from '@/components/content-wrapper';
+
+// Simple loading state that won't conflict with component's internal loading
+function SimpleLoader() {
+  return <div className="w-full h-12"></div>; // Just empty space, no visual element
+}
 
 export default function Home() {
   return (
-    <div className="flex h-full w-full items-center justify-center">
-      <div className="w-full max-w-4xl px-6">
-        <div className="mb-8 space-y-2">
-          <h1 className="text-3xl font-bold">Email Generator 💌</h1>
-          <p className="text-muted-foreground">Generate personalized cold emails from URLs with AI</p>
-        </div>
-        <EmailGenerator />
-      </div>
-    </div>
-  )
+    <ContentWrapper className="h-full">
+      <Suspense fallback={<SimpleLoader />} key="home-page-suspense">
+        <EmailGeneratorClient />
+      </Suspense>
+    </ContentWrapper>
+  );
 } 

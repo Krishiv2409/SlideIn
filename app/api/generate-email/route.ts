@@ -2,9 +2,17 @@ import { NextResponse } from 'next/server';
 import { GoogleGenAI } from "@google/genai";
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
-// Initialize Gemini client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+// Initialize Gemini client with validation
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  console.error('GEMINI_API_KEY is not set in environment variables');
+  throw new Error('GEMINI_API_KEY is not configured');
+}
+
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 // Maximum content length to send to Gemini (in characters)
 const MAX_CONTENT_LENGTH = 10000;
@@ -64,7 +72,7 @@ interface GenerateEmailRequest {
   urlContent: string;
   goal: string;
   tone: string;
-  userName: string;
+  userName?: string;
   recipientName?: string;
   recipientEmail?: string;
   url?: string;
@@ -160,8 +168,100 @@ function isValidEmail(email: string): boolean {
   return re.test(email);
 }
 
+// Detect the context of the URL to determine if it's likely an academic page
+function detectUrlContext(url?: string, cleanedContent?: string): 'academic' | 'job' | 'company' | 'generic' {
+  if (!url && !cleanedContent) return 'generic';
+  
+  try {
+    // Check URL patterns
+    if (url) {
+      const urlLower = url.toLowerCase();
+      // Academic URL patterns
+      if (
+        urlLower.includes('.edu') ||
+        urlLower.includes('faculty') ||
+        urlLower.includes('professor') ||
+        urlLower.includes('academic') ||
+        urlLower.includes('research') ||
+        urlLower.includes('lab') ||
+        urlLower.includes('department')
+      ) {
+        return 'academic';
+      }
+      
+      // Job posting patterns
+      if (
+        urlLower.includes('job') ||
+        urlLower.includes('career') ||
+        urlLower.includes('position') ||
+        urlLower.includes('apply') ||
+        urlLower.includes('employ') ||
+        urlLower.includes('hiring') ||
+        urlLower.includes('linkedin.com/jobs') ||
+        urlLower.includes('indeed.com') ||
+        urlLower.includes('glassdoor.com')
+      ) {
+        return 'job';
+      }
+      
+      // Company patterns
+      if (
+        urlLower.includes('about-us') ||
+        urlLower.includes('team') ||
+        urlLower.includes('leadership') ||
+        urlLower.includes('company') ||
+        urlLower.includes('contact-us')
+      ) {
+        return 'company';
+      }
+    }
+    
+    // Check content patterns if URL check isn't conclusive
+    if (cleanedContent) {
+      const contentLower = cleanedContent.toLowerCase();
+      
+      // Academic content keywords
+      const academicKeywords = ['professor', 'faculty', 'research', 'lab', 'publication', 'phd', 'academic', 'university', 'college'];
+      let academicScore = 0;
+      academicKeywords.forEach(keyword => {
+        if (contentLower.includes(keyword)) academicScore++;
+      });
+      
+      // Job posting keywords
+      const jobKeywords = ['job description', 'responsibilities', 'qualifications', 'apply', 'salary', 'position', 'hiring', 'recruiter'];
+      let jobScore = 0;
+      jobKeywords.forEach(keyword => {
+        if (contentLower.includes(keyword)) jobScore++;
+      });
+      
+      // Company keywords
+      const companyKeywords = ['company', 'business', 'mission', 'vision', 'founded', 'headquarters', 'team', 'ceo', 'leadership'];
+      let companyScore = 0;
+      companyKeywords.forEach(keyword => {
+        if (contentLower.includes(keyword)) companyScore++;
+      });
+      
+      // Determine context based on highest score
+      const maxScore = Math.max(academicScore, jobScore, companyScore);
+      if (maxScore > 2) {
+        if (maxScore === academicScore) return 'academic';
+        if (maxScore === jobScore) return 'job';
+        if (maxScore === companyScore) return 'company';
+      }
+    }
+    
+    return 'generic';
+  } catch (error) {
+    console.error('Error detecting URL context:', error);
+    return 'generic';
+  }
+}
+
 async function extractContactName($: cheerio.CheerioAPI, cleanedContent: string, url?: string): Promise<string> {
-  // 1. Check targeted elements that often contain professor names
+  // First, detect the context of the URL
+  const context = detectUrlContext(url, cleanedContent);
+  
+  // 1. Check targeted elements that often contain person names
   for (const selector of NAME_CONTAINING_SELECTORS) {
     const elements = $(selector);
     if (elements.length) {
@@ -175,11 +275,11 @@ async function extractContactName($: cheerio.CheerioAPI, cleanedContent: string,
             let name = match[0].trim();
             // If we matched a group, use the first group
             if (match[1]) {
-              // If the name doesn't have a title, add "Professor"
-              if (!name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
+              // Only add Professor title in academic contexts
+              if (context === 'academic' && !name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
                 name = `Professor ${match[1]}`;
               } else {
-                name = match[0];
+                name = match[1];
               }
             }
             return name;
@@ -196,8 +296,11 @@ async function extractContactName($: cheerio.CheerioAPI, cleanedContent: string,
       const match = metaName.match(pattern);
       if (match) {
         const name = match[0].trim();
-        if (match[1] && !name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
-          return `Professor ${match[1]}`;
+        if (match[1]) {
+          if (context === 'academic' && !name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
+            return `Professor ${match[1]}`;
+          }
+          return match[1];
         }
         return name;
       }
@@ -210,8 +313,11 @@ async function extractContactName($: cheerio.CheerioAPI, cleanedContent: string,
       const match = title.match(pattern);
       if (match) {
         const name = match[0].trim();
-        if (match[1] && !name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
-          return `Professor ${match[1]}`;
+        if (match[1]) {
+          if (context === 'academic' && !name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
+            return `Professor ${match[1]}`;
+          }
+          return match[1];
         }
         return name;
       }
@@ -222,7 +328,10 @@ async function extractContactName($: cheerio.CheerioAPI, cleanedContent: string,
   if (url) {
     const nameFromUrl = extractNameFromUrl(url);
     if (nameFromUrl) {
-      return `Professor ${nameFromUrl}`;
+      if (context === 'academic') {
+        return `Professor ${nameFromUrl}`;
+      }
+      return nameFromUrl;
     }
   }
 
@@ -231,8 +340,11 @@ async function extractContactName($: cheerio.CheerioAPI, cleanedContent: string,
     const match = cleanedContent.match(pattern);
     if (match) {
       const name = match[0].trim();
-      if (match[1] && !name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
-        return `Professor ${match[1]}`;
+      if (match[1]) {
+        if (context === 'academic' && !name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
+          return `Professor ${match[1]}`;
+        }
+        return match[1];
       }
       return name;
     }
@@ -257,8 +369,11 @@ async function extractContactName($: cheerio.CheerioAPI, cleanedContent: string,
         const match = text.match(pattern);
         if (match) {
           const name = match[0].trim();
-          if (match[1] && !name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
-            return `Professor ${match[1]}`;
+          if (match[1]) {
+            if (context === 'academic' && !name.match(/^(Dr\.|Professor|Prof\.|Ph\.?D)/i)) {
+              return `Professor ${match[1]}`;
+            }
+            return match[1];
           }
           return name;
         }
@@ -267,26 +382,106 @@ async function extractContactName($: cheerio.CheerioAPI, cleanedContent: string,
   }
 
   // 6. If all else fails, use Gemini to extract the name
-  const prompt = `Extract the name of the professor or lead researcher from this text. The text is from a professor's lab or faculty webpage. Only return the name with title (e.g., "Dr. John Smith" or "Professor Jane Doe"). If no clear name is found, return "Professor":\n\n${cleanedContent.substring(0, 3000)}`;
+  let prompt;
+  if (context === 'academic') {
+    prompt = `Extract the name of the professor or lead researcher from this text. The text is from a professor's lab or faculty webpage. Only return the name with title (e.g., "Dr. John Smith" or "Professor Jane Doe"). If no clear name is found, return "Professor":\n\n${cleanedContent.substring(0, 3000)}`;
+  } else if (context === 'job') {
+    prompt = `Extract the name of the hiring manager or recruiter from this text. The text is from a job posting. Only return the name without any additional text. If no clear name is found, return "Hiring Manager":\n\n${cleanedContent.substring(0, 3000)}`;
+  } else if (context === 'company') {
+    prompt = `Extract the name of a key person (CEO, founder, team lead, etc.) from this text. The text is from a company webpage. Only return the name without any additional text. If no clear name is found, return "Team":\n\n${cleanedContent.substring(0, 3000)}`;
+  } else {
+    prompt = `Extract a person's name from this text. Only return the name without any additional text. If no clear name is found, return "Team":\n\n${cleanedContent.substring(0, 3000)}`;
+  }
   
   try {
     const result = await ai.models.generateContent({
       model: 'gemini-pro',
       contents: prompt
     });
-    const name = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'Professor';
-    // If Gemini returns just "Professor", try to find a name in the content
-    if (name === 'Professor') {
+    
+    const name = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || getDefaultNameByContext(context);
+    
+    // If Gemini returns a generic fallback, try to find a name in the content
+    if (name === getDefaultNameByContext(context)) {
       const nameMatch = cleanedContent.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/);
       if (nameMatch) {
-        return `Professor ${nameMatch[0]}`;
+        if (context === 'academic') {
+          return `Professor ${nameMatch[0]}`;
+        }
+        return nameMatch[0];
       }
     }
     return name;
   } catch (error) {
     console.error('Error extracting name with Gemini:', error);
-    return 'Professor';
+    return getDefaultNameByContext(context);
   }
+}
+
+// Helper function to get default name based on context
+function getDefaultNameByContext(context: 'academic' | 'job' | 'company' | 'generic'): string {
+  switch (context) {
+    case 'academic':
+      return 'Professor';
+    case 'job':
+      return 'Hiring Manager';
+    case 'company':
+      return 'Team';
+    default:
+      return 'Team';
+  }
+}
+
+// Function to ensure the email has the correct signature with the user's name
+function ensureCorrectSignature(emailBody: string, userName: string): string {
+  // Common signature patterns
+  const signaturePatterns = [
+    /Sincerely,\s*\n+\s*([^,\n]+)/i,
+    /Best regards,\s*\n+\s*([^,\n]+)/i,
+    /Regards,\s*\n+\s*([^,\n]+)/i,
+    /Yours truly,\s*\n+\s*([^,\n]+)/i,
+    /Thanks,\s*\n+\s*([^,\n]+)/i,
+    /Thank you,\s*\n+\s*([^,\n]+)/i,
+    /Yours sincerely,\s*\n+\s*([^,\n]+)/i,
+    /Best,\s*\n+\s*([^,\n]+)/i,
+    /Cheers,\s*\n+\s*([^,\n]+)/i,
+    /Warm regards,\s*\n+\s*([^,\n]+)/i,
+    /Kind regards,\s*\n+\s*([^,\n]+)/i,
+  ];
+  
+  // Always replace "User" with the actual userName
+  emailBody = emailBody.replace(/\b(User|user)\b/g, userName);
+  
+  // Check if the email already has a signature with the user's name
+  for (const pattern of signaturePatterns) {
+    if (pattern.test(emailBody)) {
+      const match = emailBody.match(pattern);
+      if (match && match[1]) {
+        const signatureName = match[1].trim();
+        // Check for common generic names or if it doesn't match the userName
+        if (
+          signatureName.toLowerCase() === 'user' || 
+          signatureName.toLowerCase() === 'me' || 
+          signatureName.toLowerCase() === 'your name' || 
+          signatureName.toLowerCase() !== userName.toLowerCase()
+        ) {
+          // Replace the incorrect name with the user's name
+          return emailBody.replace(pattern, (matched) => {
+            const salutationPart = matched.split(/\n+\s*/)[0];
+            return `${salutationPart}\n${userName}`;
+          });
+        }
+      }
+    }
+  }
+  
+  // If no signature found or replacement needed, check if we need to add a signature
+  if (!signaturePatterns.some(pattern => pattern.test(emailBody))) {
+    // Add a signature if none exists
+    return `${emailBody.trim()}\n\nBest regards,\n${userName}`;
+  }
+  
+  return emailBody;
 }
 
 function extractRelevantContent($: cheerio.CheerioAPI): string {
@@ -326,16 +521,183 @@ function shouldIgnoreElement($: cheerio.CheerioAPI, element: cheerio.Element): b
   );
 }
 
+// Create Supabase server client
+const createClient = async () => {
+  const cookieStore = await cookies();
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+};
+
+// Function to extract user name from Supabase user data with robust fallbacks
+function extractUserName(user: any): string {
+  if (!user) return 'Me';
+  
+  // Check if we have user metadata
+  const metadata = user.user_metadata || {};
+  
+  // List of generic usernames to avoid using
+  const genericNames = ['user', 'me', 'admin', 'customer', 'guest', 'person'];
+  
+  // Try to get name from various metadata fields
+  let name = metadata.full_name || 
+             metadata.name ||
+             metadata.preferred_name ||
+             metadata.display_name ||
+             metadata.given_name ||
+             // If there's a first_name and last_name, combine them
+             (metadata.first_name && metadata.last_name 
+               ? `${metadata.first_name} ${metadata.last_name}`
+               : null) ||
+             // Try just first name if available
+             metadata.first_name ||
+             // Extract from email (before the @)
+             (user.email ? user.email.split('@')[0] : null) ||
+             'Me';
+             
+  // Clean up the name
+  name = name.trim();
+  
+  // Avoid using generic names
+  if (genericNames.includes(name.toLowerCase())) {
+    // If the name is generic but we have an email, use the email username instead
+    if (user.email) {
+      const emailName = user.email.split('@')[0];
+      // Capitalize the first letter of the email username
+      name = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+    } else {
+      name = 'Me'; // Fallback
+    }
+  }
+  
+  // Ensure first letter is capitalized
+  if (name && name.length > 0) {
+    name = name.charAt(0).toUpperCase() + name.slice(1);
+  }
+  
+  return name;
+}
+
+// Function to validate and clean up any provided user name
+function validateUserName(name: string | undefined | null): string {
+  if (!name) return 'Me';
+  
+  // Clean up the name
+  name = name.trim();
+  
+  // List of generic usernames to avoid
+  const genericNames = ['user', 'me', 'admin', 'customer', 'guest', 'person'];
+  
+  // If name is generic or very short, reject it
+  if (genericNames.includes(name.toLowerCase()) || name.length < 2) {
+    return 'Me';
+  }
+  
+  // Ensure first letter is capitalized
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
 export async function POST(request: Request) {
   try {
+    console.log('Starting email generation process...');
+    
+    // Initialize Supabase client
+    const supabase = await createClient();
+    
     // Parse the request body
     const body: GenerateEmailRequest = await request.json();
     let { urlContent, goal, tone, userName, recipientName, recipientEmail, url } = body;
     let extractedEmails: string[] = [];
 
+    console.log('Request parameters:', { goal, tone, userName, url });
+
+    // Validate required fields
+    if (!urlContent) {
+      console.error('Missing urlContent in request');
+      return NextResponse.json(
+        { error: 'URL content is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!goal) {
+      console.error('Missing goal in request');
+      return NextResponse.json(
+        { error: 'Goal is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!tone) {
+      console.error('Missing tone in request');
+      return NextResponse.json(
+        { error: 'Tone is required' },
+        { status: 400 }
+      );
+    }
+    
+    // Get user from Supabase if userName isn't provided
+    if (!userName || userName.trim().toLowerCase() === 'user') {
+      try {
+        // Get the current authenticated user
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) {
+          console.error('Error getting user from Supabase:', error);
+        } else if (user) {
+          // Try to get the name from user_metadata
+          userName = user.user_metadata?.name || 
+                    user.user_metadata?.full_name ||
+                    user.user_metadata?.preferred_name ||
+                    user.user_metadata?.display_name ||
+                    (user.user_metadata?.first_name && user.user_metadata?.last_name 
+                      ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+                      : user.user_metadata?.first_name);
+          // If still no userName, try the profiles table as fallback
+          if (!userName) {
+            try {
+              const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('full_name, display_name, first_name, last_name, email')
+                .eq('id', user.id)
+                .single();
+              if (!profileError && profile) {
+                userName = profile.full_name || 
+                          profile.display_name || 
+                          (profile.first_name && profile.last_name ? 
+                            `${profile.first_name} ${profile.last_name}` : 
+                            profile.first_name);
+              }
+            } catch (err) {
+              // Ignore
+            }
+          }
+          // If we still don't have a name, fall back to email or defaults
+          if (!userName && user.email) {
+            let cleanName = user.email.split('@')[0].replace(/[._-]/g, ' ');
+            cleanName = cleanName.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+            userName = cleanName;
+          }
+          if (!userName) userName = 'Me';
+        } else {
+          userName = 'Me';
+        }
+      } catch (error) {
+        userName = 'Me';
+      }
+    }
+
     // If URL is provided, fetch and process the content
     if (url) {
       try {
+        console.log('Fetching URL content:', url);
         // Fetch the webpage with timeout
         const response = await axios.get(url, {
           timeout: 5000, // 5 second timeout
@@ -371,6 +733,7 @@ export async function POST(request: Request) {
         // Use the cleaned content
         urlContent = cleanedContent;
       } catch (error) {
+        console.error('Error processing URL:', error);
         if (axios.isAxiosError(error)) {
           if (error.code === 'ECONNABORTED') {
             return NextResponse.json(
@@ -395,83 +758,134 @@ export async function POST(request: Request) {
       ? urlContent.substring(0, MAX_CONTENT_LENGTH) + '...'
       : urlContent;
 
+    console.log('Generating email with Gemini...');
+    
     // Create a dynamic prompt based on the input parameters
-    const prompt = `Generate a personalized cold email using the following information:
+    const prompt = `
+      Generate a highly personalized, natural cold email using the following information:
 
-URL: ${url}
-URL Content Preview: ${truncatedContent}
-Goal: ${goal}
-Tone: ${tone}
-Sender's Name: ${userName}
-Recipient's Name: ${recipientName || '[Name]'}
+      - URL: ${url}
+      - URL Content Preview: ${truncatedContent}
+      - Goal: ${goal}
+      - Tone: ${tone}
+      - Sender's Name: ${userName || 'Me'}
+      - Recipient's Name: ${recipientName || '[Name]'}
+      - Context: ${detectUrlContext(url, truncatedContent)}
 
-First, analyze both the provided URL content preview AND search the URL directly to gather more context and specific details about the recipient/company.
+      Before writing:
+      1. Deeply analyze the provided URL content preview.
+      2. Attempt to infer or simulate a live search of the URL and related information.
+      3. Identify and extract at least 2 specific, verifiable insights relevant to the recipient or organization.
 
-Then, create a short, direct email that:
-1. References specific, relevant details from both the URL and your search of it
-2. Matches the specified tone ("${tone}")
-3. Clearly states the sender's goal
-4. Sounds natural and human-like, not like a template
-5. Shows you've done your research by mentioning recent or notable information from the URL
+      **Do not** proceed to writing the email if you cannot find specific details — instead, thoughtfully reflect on the provided preview.
 
-The response must be in valid JSON format with exactly these fields:
-{
-  "subject": "The email subject line",
-  "body": "The complete email body"
-}
+      Email writing rules:
+      - Adapt your style and format to the context (academic, job application, business, etc.)
+      - You must *mention exact and real* details that show clear research.
+      - Absolutely **no placeholders** like [insert company project].
+      - The email must *feel naturally written by a human*, not like a template.
+      - Match the requested tone ("${tone}").
+      - Clearly state the sender's goal and end with a friendly, low-pressure call to action.
+      - Keep the body under 150 words unless a slightly longer message fits the tone.
+      - Address the recipient appropriately based on their context (professor for academic, hiring manager for job, etc.)
+      - CRITICAL: The sign-off MUST include the EXACT name "${userName || 'Me'}" and not generic terms.
+      - NEVER use "User" or any generic placeholder for the sender's name.
+      - The email signature must be in this exact format: 
+        
+        "Best regards,
+        ${userName || 'Me'}"
+        
+        OR
+        
+        "Sincerely,
+        ${userName || 'Me'}"
 
-Make sure the email is:
-- Concise and professional
-- Genuinely engaging
-- Demonstrates knowledge of the recipient/company
-- Includes specific details that show you've actually looked at their content`;
-
-    // Generate the email using Gemini
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-    });
-
-    const text = response.text || '';
-    
-    // Clean the response text by removing markdown code block formatting
-    const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim();
-    
-    if (!text) {
-      throw new Error('No response text received from Gemini');
-    }
-    
-    // Parse the JSON response
-    try {
-      const emailData = JSON.parse(cleanedText);
-      return NextResponse.json({
-        ...emailData,
-        recipientName: recipientName || 'Professor',
-        recipientEmail: recipientEmail || extractedEmails[0] || '',
-        extractedEmails: extractedEmails
-      });
-    } catch (parseError) {
-      console.error('Error parsing Gemini response:', parseError);
-      // If JSON parsing fails, try to extract subject and body using regex
-      const subjectMatch = cleanedText.match(/"subject":\s*"([^"]+)"/);
-      const bodyMatch = cleanedText.match(/"body":\s*"([^"]+)"/);
-      
-      if (subjectMatch && bodyMatch) {
-        return NextResponse.json({
-          subject: subjectMatch[1],
-          body: bodyMatch[1],
-          recipientName: recipientName || 'Professor',
-          recipientEmail: recipientEmail || extractedEmails[0] || '',
-          extractedEmails: extractedEmails
-        });
-      } else {
-        throw new Error('Could not parse response format');
+      Return the output strictly in this valid JSON format:
+      {
+        "subject": "Short and personalized subject line",
+        "body": "The fully written email body including the appropriate greeting and sign-off with the sender's exact name '${userName || 'Me'}'"
       }
+
+      Important:
+      - If URL information is insufficient, say so naturally in the email, but still make it sound like you made an effort.
+      - Prioritize being real, human, and engaging over sounding formal or robotic.
+      - Use complete sentences. Avoid buzzwords and generic phrases like "innovative solutions" or "dynamic environment" unless specifically referenced from research.
+      - THE SENDER NAME MUST BE EXACTLY "${userName || 'Me'}", NOT "User" OR ANY OTHER PLACEHOLDER.
+
+      Language: English.
+    `;
+
+    try {
+      // Generate the email using Gemini
+      console.log('Sending request to Gemini API...');
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: prompt,
+      });
+
+      console.log('Received response from Gemini');
+
+      const text = response.text || '';
+      
+      if (!text) {
+        console.error('No response text received from Gemini');
+        throw new Error('No response text received from Gemini');
+      }
+      
+      // Clean the response text by removing markdown code block formatting
+      const cleanedText = text.replace(/```json\n?|\n?```/g, '').trim();
+      
+      // Parse the JSON response
+      try {
+        console.log('Parsing Gemini response...');
+        const emailData = JSON.parse(cleanedText);
+        console.log('Successfully parsed response');
+        
+        // Ensure the email body has the correct signature with the user's name
+        const body = ensureCorrectSignature(emailData.body, userName || 'Me');
+        
+        return NextResponse.json({
+          ...emailData,
+          body,
+          recipientName: recipientName || getDefaultNameByContext(detectUrlContext(url, truncatedContent)),
+          recipientEmail: recipientEmail || extractedEmails[0] || '',
+          extractedEmails: extractedEmails,
+          userName: userName || ''
+        });
+      } catch (parseError) {
+        console.error('Error parsing Gemini response:', parseError);
+        console.error('Raw response:', cleanedText);
+        // If JSON parsing fails, try to extract subject and body using regex
+        const subjectMatch = cleanedText.match(/"subject":\s*"([^"]+)"/);
+        const bodyMatch = cleanedText.match(/"body":\s*"([^"]+)"/);
+        
+        if (subjectMatch && bodyMatch) {
+          // Ensure the email body has the correct signature with the user's name
+          const body = ensureCorrectSignature(bodyMatch[1], userName || 'Me');
+          
+          return NextResponse.json({
+            subject: subjectMatch[1],
+            body,
+            recipientName: recipientName || getDefaultNameByContext(detectUrlContext(url, truncatedContent)),
+            recipientEmail: recipientEmail || extractedEmails[0] || '',
+            extractedEmails: extractedEmails,
+            userName: userName || ''
+          });
+        } else {
+          throw new Error('Could not parse response format');
+        }
+      }
+    } catch (error) {
+      console.error('Error calling Gemini API:', error);
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Failed to generate email with AI' },
+        { status: 500 }
+      );
     }
   } catch (error) {
-    console.error('Error generating email:', error);
+    console.error('Error in email generation process:', error);
     return NextResponse.json(
-      { error: 'Failed to generate email' },
+      { error: error instanceof Error ? error.message : 'Failed to generate email' },
       { status: 500 }
     );
   }

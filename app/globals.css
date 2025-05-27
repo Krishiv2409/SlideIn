@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Apple Emoji styling */
+.apple-emoji {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-style: normal;
+  font-size: 1.2em;
+  line-height: 1;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 0.1em;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -25,6 +36,10 @@
     --ring: 240 5.9% 10%;
     --radius: 0.5rem;
 
+    /* SlideIn brand colors */
+    --pink-500: 336 73% 60%;
+    --pink-600: 336 73% 55%;
+    
     /* Sidebar variables */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -34,6 +49,14 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Sidebar width variables */
+    --sidebar-width: 16rem;
+    --sidebar-width-collapsed: 4.5rem; 
+    --sidebar-width-icon: 4.5rem;
+    
+    /* Content max-width variables for centering */
+    --content-max-width: 1200px;
   }
 
   .dark {
@@ -76,6 +99,172 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Typography - For better visual hierarchy */
+  .font-display {
+    font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  
+  .font-satoshi {
+    font-family: 'Satoshi', sans-serif;
+  }
+}
+
+/* Sidebar states */
+body[data-sidebar-state="collapsed"] main {
+  margin-left: var(--sidebar-width-collapsed);
+}
+
+body[data-sidebar-state="expanded"] main {
+  margin-left: var(--sidebar-width);
+}
+
+/* For smooth transitions */
+main {
+  transition: margin-left 0.3s ease;
+}
+
+/* Center icons in collapsed sidebar */
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] [data-sidebar="menu"] {
+  align-items: center;
+}
+
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] [data-sidebar="menu-button"] svg {
+  margin: 0 auto;
+}
+
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] [data-sidebar="menu-button"] span {
+  display: none;
+}
+
+/* Override sidebar width */
+body[data-sidebar-state="collapsed"] [data-sidebar="sidebar"] {
+  width: var(--sidebar-width-collapsed) !important;
+}
+
+body[data-sidebar-state="collapsed"] [data-sidebar="menu-button"] {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Content area positioning - force consistent positioning from initial load */
+.content-area {
+  margin-left: var(--sidebar-width) !important;
+  width: calc(100vw - var(--sidebar-width)) !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Then apply sidebar state transitions after load */
+[data-sidebar-state="collapsed"] .content-area {
+  margin-left: var(--sidebar-width-collapsed) !important;
+  width: calc(100vw - var(--sidebar-width-collapsed)) !important;
+  transition: all 0.3s ease;
+}
+
+[data-sidebar-state="expanded"] .content-area {
+  margin-left: var(--sidebar-width) !important;
+  width: calc(100vw - var(--sidebar-width)) !important;
+  transition: all 0.3s ease;
+}
+
+/* Ensure consistent centering for all container widths */
+.email-generator-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* Ensure the inner container stays centered */
+.email-generator-container > div {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100%;
+}
+
+/* Inbox tracker container with dynamic centering */
+[data-sidebar-state="collapsed"] .inbox-tracker-container,
+[data-sidebar-state="expanded"] .inbox-tracker-container {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  transition: all 0.3s ease;
+}
+
+/* Inbox tracker specific adjustments */
+.inbox-tracker-container {
+  transition: all 0.3s ease;
+  width: 100%;
+  overflow-x: auto; /* Add horizontal scrolling only when needed */
+}
+
+.inbox-tracker-container table {
+  width: 100%;
+  margin: 0;
+  transition: all 0.3s ease;
+  table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* Ensure all columns get enough space */
+.inbox-tracker-container table th,
+.inbox-tracker-container table td {
+  white-space: normal;
+}
+
+/* Ensure consistent table width in both states */
+[data-sidebar-state="expanded"] .inbox-tracker-container table,
+[data-sidebar-state="collapsed"] .inbox-tracker-container table {
+  width: 100% !important;
+  font-size: 0.875rem; /* Use the same font size in both states */
+}
+
+/* Ensure consistent padding in both states */
+[data-sidebar-state="expanded"] .inbox-tracker-container th,
+[data-sidebar-state="expanded"] .inbox-tracker-container td,
+[data-sidebar-state="collapsed"] .inbox-tracker-container th,
+[data-sidebar-state="collapsed"] .inbox-tracker-container td {
+  padding: 0.75rem !important;
+  vertical-align: middle; /* Center content vertically */
+}
+
+/* Ensure icons and emojis display properly */
+.inbox-tracker-container td img,
+.inbox-tracker-container td svg,
+.inbox-tracker-container td span {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+  div[data-sidebar-state="collapsed"] .email-generator-container .form-layout,
+  div[data-sidebar-state="expanded"] .email-generator-container .form-layout {
+    flex-direction: column;
+  }
+  
+  div[data-sidebar-state="collapsed"] .email-generator-container .form-layout > div,
+  div[data-sidebar-state="expanded"] .email-generator-container .form-layout > div {
+    width: 100%;
+  }
+
+  /* Reset centering on small screens */
+  [data-sidebar-state="collapsed"] .email-generator-container,
+  [data-sidebar-state="collapsed"] .inbox-tracker-container {
+    transform: translateX(0);
+  }
 }
 
 @media (min-width: 1536px) {
@@ -83,3 +272,43 @@
     font-size: calc(16px + 0.2vw);
   }
 }
+/* Prevent table compression in both states */
+[data-sidebar-state="expanded"] .inbox-tracker-container table,
+[data-sidebar-state="collapsed"] .inbox-tracker-container table {
+  width: 100% !important;
+  font-size: 0.875rem; /* Use the same font size in both states */
+}
+
+/* Add specific positioning for collapsed state */
+[data-sidebar-state="collapsed"] .inbox-tracker-container table {
+  margin-left: 0;
+}
+
+/* Styling for email editing view */
+.email-generator-container .grid.md\:grid-cols-\[minmax\(500px\,1fr\)\,minmax\(400px\,1fr\)\] {
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Give more space to the email editing side and reduce column gap */
+@media (min-width: 768px) {
+  .email-generator-container .grid.md\:grid-cols-\[minmax\(500px\,1fr\)\,minmax\(400px\,1fr\)\] > *:first-child {
+    padding-right: 0.5rem;
+  }
+  
+  .email-generator-container .grid.md\:grid-cols-\[minmax\(500px\,1fr\)\,minmax\(400px\,1fr\)\] > *:last-child {
+    padding-left: 0.5rem;
+  }
+  
+  /* Make the email textarea taller */
+  .email-generator-container textarea[id="body"] {
+    min-height: 450px;
+  }
+}
+
+/* Ensure card containers fill available space */
+.email-generator-container .card {
+  height: 100%;
+}
+
+

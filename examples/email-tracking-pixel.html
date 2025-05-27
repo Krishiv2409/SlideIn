@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Tracking Pixel Example</title>
+</head>
+<body>
+    <h1>How to Add a Tracking Pixel to Your Email</h1>
+    
+    <h2>Example HTML Code</h2>
+    <pre><code>
+&lt;!-- Add this tracking pixel to your email template -->
+&lt;img src="https://YOUR_PROJECT_REF.functions.supabase.co/tracker?id=YOUR_EMAIL_ID" width="1" height="1" style="display:none;" alt="" />
+    </code></pre>
+    
+    <h2>Live Example</h2>
+    <p>This is how the email would look with a tracking pixel (which is invisible):</p>
+    
+    <div style="border: 1px solid #ccc; padding: 20px; margin: 20px 0;">
+        <h3>Sample Email</h3>
+        <p>Dear Recipient,</p>
+        <p>Thank you for your interest in our product. We would love to schedule a call to discuss how we can help you achieve your goals.</p>
+        <p>Best regards,<br>Your Name</p>
+        
+        <!-- This is where the tracking pixel would be placed -->
+        <img src="#" width="1" height="1" style="display:none;" alt="" />
+    </div>
+    
+    <h2>Implementation Notes</h2>
+    <ul>
+        <li>Replace <code>YOUR_PROJECT_REF</code> with your Supabase project reference.</li>
+        <li>Replace <code>YOUR_EMAIL_ID</code> with the UUID of the specific email you're tracking from the <code>email_events</code> table.</li>
+        <li>The pixel is set to <code>display:none</code> so it doesn't affect the email layout.</li>
+        <li>Make sure to add this pixel at the end of your email HTML to ensure it loads after the content.</li>
+    </ul>
+    
+    <h2>Using with Email Services</h2>
+    <p>When sending emails through API-based services (like Resend, SendGrid, etc.), insert this HTML snippet into your email template before sending.</p>
+    
+    <h2>JavaScript Example for Creating an Email Event Record</h2>
+    <pre><code>
+// First, create an entry in the email_events table before sending the email
+const { data, error } = await supabase
+  .from('email_events')
+  .insert([
+    { 
+      email_id: generatedUuid, // Save this to use in your tracking pixel
+      recipient_email: 'recipient@example.com',
+      subject: 'Your Email Subject'
+    }
+  ])
+  .select();
+
+// Then use the email_id in your tracking pixel
+const trackingPixel = `&lt;img src="https://YOUR_PROJECT_REF.functions.supabase.co/tracker?id=${generatedUuid}" width="1" height="1" style="display:none;" alt="" />`;
+    </code></pre>
+</body>
+</html> 
