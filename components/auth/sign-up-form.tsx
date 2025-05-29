@@ -13,20 +13,47 @@ import { GoogleButton } from "./google-button"
 import { Logo } from "../logo"
 import Image from "next/image"
 import { MicrosoftSignIn } from "./MicrosoftSignIn"
+import { createClient } from "@/utils/supabase/client"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export function SignUpForm() {
   const [isLoading, setIsLoading] = useState(false)
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const router = useRouter()
+  const supabase = createClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-    
-    // Simulate account creation
-    setTimeout(() => {
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/callback`,
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+
+      setSuccess("Account created successfully! Please check your email for verification.")
+      setTimeout(() => {
+        router.push("/sign-in")
+      }, 2000)
+    } catch (error: any) {
+      console.error('Error signing up:', error)
+      setError(error.message || 'Failed to sign up')
+    } finally {
       setIsLoading(false)
-      router.push("/") // Redirect to dashboard after sign up
-    }, 1500)
+    }
   }
 
   return (
@@ -46,6 +73,16 @@ export function SignUpForm() {
       </CardHeader>
       <form onSubmit={handleSubmit} suppressHydrationWarning>
         <CardContent className="px-8 pb-6 space-y-5">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          {success && (
+            <Alert>
+              <AlertDescription className="text-green-600">{success}</AlertDescription>
+            </Alert>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2.5">
               <Label htmlFor="first-name" className="font-medium">First name</Label>
@@ -75,6 +112,8 @@ export function SignUpForm() {
               type="email" 
               placeholder="you@example.com" 
               required 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="h-11 transition-all focus-visible:ring-pink-500"
               suppressHydrationWarning
             />
@@ -86,6 +125,8 @@ export function SignUpForm() {
               type="password" 
               placeholder="••••••••" 
               required 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="h-11 transition-all focus-visible:ring-pink-500"
               suppressHydrationWarning
             />
