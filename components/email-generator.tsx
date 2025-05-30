@@ -176,6 +176,7 @@ export function EmailGenerator() {
   const [selectedAccount, setSelectedAccount] = useState<string>('')
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true)
   const [trackingEnabled, setTrackingEnabled] = useState(true)
+  const [privacyConsent, setPrivacyConsent] = useState(false)
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -454,6 +455,11 @@ export function EmailGenerator() {
     
     if (!recipientEmail) {
       toast.error("Please enter a recipient email address");
+      return;
+    }
+
+    if (!privacyConsent) {
+      toast.error("Please agree to the Privacy Policy before sending");
       return;
     }
     
@@ -1042,6 +1048,32 @@ export function EmailGenerator() {
                           You'll know when your email is opened
                         </span>
                       )}
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-2">
+                        <div className="flex items-center h-5 mt-0.5">
+                          <input
+                            type="checkbox"
+                            id="privacy-consent"
+                            required
+                            checked={privacyConsent}
+                            onChange={(e) => setPrivacyConsent(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500"
+                          />
+                        </div>
+                        <Label htmlFor="privacy-consent" className="text-sm text-gray-700 cursor-pointer">
+                          I agree to the{' '}
+                          <a 
+                            href="/privacy-policy" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-pink-500 hover:text-pink-600 underline"
+                          >
+                            Privacy Policy
+                          </a>
+                          {' '}and consent to the processing of my data for email tracking purposes
+                        </Label>
+                      </div>
                     </div>
                     <Button 
                       onClick={handleSend} 

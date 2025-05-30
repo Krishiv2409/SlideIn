@@ -22,6 +22,7 @@ export function SignUpForm() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [privacyConsent, setPrivacyConsent] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -30,6 +31,11 @@ export function SignUpForm() {
     setIsLoading(true)
     setError(null)
     setSuccess(null)
+
+    if (!privacyConsent) {
+      setError("Please agree to the Privacy Policy to continue")
+      return
+    }
 
     try {
       const { error } = await supabase.auth.signUp({
@@ -132,16 +138,19 @@ export function SignUpForm() {
             />
           </div>
           <div className="flex items-center space-x-3 pt-2">
-            <Checkbox id="terms" className="data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500" suppressHydrationWarning />
-            <Label htmlFor="terms" className="text-sm font-normal leading-tight cursor-pointer">
+            <Checkbox 
+              id="privacy" 
+              checked={privacyConsent}
+              onCheckedChange={(checked) => setPrivacyConsent(checked as boolean)}
+              className="data-[state=checked]:bg-pink-500 data-[state=checked]:border-pink-500" 
+              suppressHydrationWarning 
+            />
+            <Label htmlFor="privacy" className="text-sm font-normal leading-tight cursor-pointer">
               I agree to the{" "}
-              <Link href="/terms" className="text-pink-500 hover:text-pink-600 transition-colors">
-                Terms of Service
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" className="text-pink-500 hover:text-pink-600 transition-colors">
+              <Link href="/privacy-policy" className="text-pink-500 hover:text-pink-600 transition-colors">
                 Privacy Policy
               </Link>
+              {" "}and consent to the processing of my data
             </Label>
           </div>
         </CardContent>
