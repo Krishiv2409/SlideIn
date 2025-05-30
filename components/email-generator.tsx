@@ -71,9 +71,8 @@ interface EmailAccount {
 
 // Typing animation with fluid transitions and custom font
 function TypingEmailAnimation() {
-  // Update this list to change sample emails
   const emails = [
-    'hello@slidein.ai',
+    'hello@slidein.now',
     'student@gatech.edu',
     'founder@startup.com',
     'contact@yourdomain.io'

@@ -98,7 +98,7 @@ export default function PrivacyPolicy() {
                 </ul>
               </div>
             </div>
-          </section>
+        </section>
 
           <section id="information-use">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">How We Use Your Information</h2>
@@ -108,8 +108,8 @@ export default function PrivacyPolicy() {
               <li>Deliver follow-up automation</li>
               <li>Improve user experience via analytics</li>
               <li>Send essential service communications</li>
-            </ul>
-          </section>
+          </ul>
+        </section>
 
           <section id="gmail-api">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Gmail API & Google User Data Compliance</h2>
@@ -120,9 +120,9 @@ export default function PrivacyPolicy() {
                 <li>We do not sell or share Gmail data</li>
                 <li>We do not use Gmail data for advertising or marketing</li>
                 <li>We access Gmail data only to support the features you explicitly enable</li>
-              </ul>
+          </ul>
             </div>
-          </section>
+        </section>
 
           <section id="email-tracking">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Email Tracking</h2>
@@ -134,7 +134,7 @@ export default function PrivacyPolicy() {
                 <li>No tracking occurs without your consent</li>
               </ul>
             </div>
-          </section>
+        </section>
 
           <section id="data-sharing">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Data Sharing and Third Parties</h2>
@@ -149,15 +149,15 @@ export default function PrivacyPolicy() {
                 We never sell your data.
               </p>
             </div>
-          </section>
+        </section>
 
           <section id="data-retention">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Data Retention</h2>
             <ul className="list-disc pl-5 text-gray-600 space-y-1">
               <li>We retain your data only as long as necessary for service delivery</li>
               <li>You can delete your account at any time; all associated data will be purged within 30 days</li>
-            </ul>
-          </section>
+          </ul>
+        </section>
 
           <section id="security">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Security Measures</h2>
@@ -201,8 +201,8 @@ export default function PrivacyPolicy() {
             <p className="text-gray-600">
               We may revise this Privacy Policy periodically. Changes will be posted on this page with the updated date. 
               Continued use of SlideIn after changes constitutes agreement to the updated terms.
-            </p>
-          </section>
+          </p>
+        </section>
 
           <section id="contact">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Contact Us</h2>
