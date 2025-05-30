@@ -969,103 +969,36 @@ export function EmailGenerator() {
                           <TabsTrigger value="advanced">Advanced</TabsTrigger>
                         </TabsList>
                         <TabsContent value="basic" className="space-y-4 pt-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center h-5 w-5">
-                              <input
-                                type="checkbox"
-                                id="track-opens"
-                                defaultChecked
-                                className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500"
+                          <div className="flex items-center justify-between space-x-2">
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                id="tracking"
+                                checked={trackingEnabled}
+                                onCheckedChange={setTrackingEnabled}
                               />
+                              <Label htmlFor="tracking" className="text-sm text-gray-700 cursor-pointer">
+                                Enable email tracking
+                              </Label>
                             </div>
-                            <Label htmlFor="track-opens" className="text-sm font-medium cursor-pointer flex-grow">
-                              Track opens
-                            </Label>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center h-5 w-5">
-                              <input
-                                type="checkbox"
-                                id="track-clicks"
-                                defaultChecked
-                                className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500"
-                              />
-                            </div>
-                            <Label htmlFor="track-clicks" className="text-sm font-medium cursor-pointer flex-grow">
-                              Track link clicks
-                            </Label>
+                            {trackingEnabled && (
+                              <span className="text-xs text-gray-500 italic">
+                                You'll know when your email is opened
+                              </span>
+                            )}
                           </div>
                         </TabsContent>
                         <TabsContent value="advanced" className="space-y-4 pt-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center h-5 w-5">
-                              <input 
-                                type="checkbox" 
-                                id="auto-follow" 
-                                className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500" 
-                              />
+                          <div className="flex flex-col items-center justify-center py-6 text-center space-y-3">
+                            <Sparkles className="h-8 w-8 text-gray-400" />
+                            <div>
+                              <h3 className="text-lg font-medium text-gray-700">Advanced Features Coming Soon</h3>
+                              <p className="text-sm text-gray-500 mt-1">
+                                Auto follow-ups, scheduling, and more advanced features are on the way!
+                              </p>
                             </div>
-                            <Label htmlFor="auto-follow" className="text-sm font-medium cursor-pointer flex-grow">
-                              Auto follow-up in 3 days
-                            </Label>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center justify-center h-5 w-5">
-                              <input 
-                                type="checkbox" 
-                                id="schedule" 
-                                className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500" 
-                              />
-                            </div>
-                            <Label htmlFor="schedule" className="text-sm font-medium cursor-pointer flex-grow">
-                              Schedule for optimal time
-                            </Label>
                           </div>
                         </TabsContent>
                       </Tabs>
-                    </div>
-                    <div className="flex items-center justify-between space-x-2">
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="tracking"
-                          checked={trackingEnabled}
-                          onCheckedChange={setTrackingEnabled}
-                        />
-                        <Label htmlFor="tracking" className="text-sm text-gray-700 cursor-pointer">
-                          Enable email tracking
-                        </Label>
-                      </div>
-                      {trackingEnabled && (
-                        <span className="text-xs text-gray-500 italic">
-                          You'll know when your email is opened
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-start space-x-2">
-                        <div className="flex items-center h-5 mt-0.5">
-                          <input
-                            type="checkbox"
-                            id="privacy-consent"
-                            required
-                            checked={privacyConsent}
-                            onChange={(e) => setPrivacyConsent(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-pink-500 focus:ring-pink-500"
-                          />
-                        </div>
-                        <Label htmlFor="privacy-consent" className="text-sm text-gray-700 cursor-pointer">
-                          I agree to the{' '}
-                          <a 
-                            href="/privacy-policy" 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-pink-500 hover:text-pink-600 underline"
-                          >
-                            Privacy Policy
-                          </a>
-                          {' '}and consent to the processing of my data for email tracking purposes
-                        </Label>
-                      </div>
                     </div>
                     <Button 
                       onClick={handleSend} 
