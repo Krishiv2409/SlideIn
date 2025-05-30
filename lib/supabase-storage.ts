@@ -85,58 +85,37 @@ export const syncGmailTokensFromEmailAccounts = async (): Promise<boolean> => {
       return false;
     }
 
-    // Get the gmail account from email_accounts
-    const { data: gmailAccount, error: accountError } = await supabase
+    // Get all Gmail accounts for the user, ordered by default first then most recent
+    const { data: gmailAccounts, error: accountsError } = await supabase
       .from('email_accounts')
       .select('*')
       .eq('user_id', session.user.id)
       .eq('provider', 'gmail')
-      .eq('is_default', true)
-      .single();
-    
-    if (accountError) {
-      console.log('No default Gmail account found, trying any Gmail account');
-      // Try to get any Gmail account if no default
-      const { data: anyGmailAccount, error: anyAccountError } = await supabase
-        .from('email_accounts')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('provider', 'gmail')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-        
-      if (anyAccountError || !anyGmailAccount) {
-        console.log('No Gmail account found in email_accounts table');
-        return false;
-      }
-      
-      // Use the non-default account
-      if (anyGmailAccount.refresh_token && anyGmailAccount.refresh_token !== 'EMPTY') {
-        await saveGmailTokens({
-          access_token: anyGmailAccount.access_token,
-          refresh_token: anyGmailAccount.refresh_token,
-          expiry_date: anyGmailAccount.expiry_date
-        });
-        console.log('Successfully synced tokens from non-default Gmail account');
-        return true;
-      }
-      
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (accountsError || !gmailAccounts || gmailAccounts.length === 0) {
+      console.log('No Gmail accounts found:', accountsError);
       return false;
     }
+
+    // Find the first account with a valid refresh token
+    const validAccount = gmailAccounts.find(acc => acc.refresh_token && acc.refresh_token !== 'EMPTY');
     
-    // If we found a default account with a valid refresh token, sync it
-    if (gmailAccount.refresh_token && gmailAccount.refresh_token !== 'EMPTY') {
-      await saveGmailTokens({
-        access_token: gmailAccount.access_token,
-        refresh_token: gmailAccount.refresh_token,
-        expiry_date: gmailAccount.expiry_date
-      });
-      console.log('Successfully synced tokens from default Gmail account');
-      return true;
+    if (!validAccount) {
+      console.log('No Gmail account found with valid refresh token');
+      return false;
     }
-    
-    return false;
+
+    // Save the tokens to gmail_tokens table
+    await saveGmailTokens({
+      access_token: validAccount.access_token,
+      refresh_token: validAccount.refresh_token,
+      expiry_date: validAccount.expiry_date
+    });
+
+    console.log('Successfully synced tokens from Gmail account:', validAccount.email);
+    return true;
   } catch (error) {
     console.error('Error in syncGmailTokensFromEmailAccounts:', error);
     return false;
@@ -198,7 +177,7 @@ const getGoogleOAuthCredentials = async (): Promise<{clientId: string, clientSec
 };
 
 /**
- * Get Gmail tokens from Supabase and refresh if needed
+ * Get Gmail tokens from the default or most recently used Gmail account
  */
 export const getGmailTokens = async (): Promise<GmailTokens | null> => {
   try {
@@ -222,141 +201,61 @@ export const getGmailTokens = async (): Promise<GmailTokens | null> => {
       return null;
     }
 
-    // Try to get tokens from gmail_tokens table
-    let { data, error } = await supabase
-      .from('gmail_tokens')
+    // Get the default Gmail account or most recently created one
+    const { data: account, error } = await supabase
+      .from('email_accounts')
       .select('*')
       .eq('user_id', session.user.id)
+      .eq('provider', 'gmail')
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
 
-    console.log('Token retrieval result:', { data, error });
-
-    // If no tokens found or missing refresh token, try to sync from email_accounts
-    if ((error || !data || !data.refresh_token) && await syncGmailTokensFromEmailAccounts()) {
-      // Try again after sync
-      const { data: syncedData, error: syncedError } = await supabase
-        .from('gmail_tokens')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .single();
-        
-      if (syncedError || !syncedData) {
-        console.log('Failed to get tokens even after sync');
-        return null;
-      }
-      
-      console.log('Successfully retrieved tokens after sync:', syncedData);
-      data = syncedData;
-      error = null;
-    }
-    
     if (error) {
-      if (error.code === 'PGRST116' || error.code === '406') {
-        console.log('No Gmail tokens found for user');
-        return null;
-      }
-      console.error('Error querying Gmail tokens:', error);
+      console.error('Error querying Gmail account:', error);
       return null;
     }
-    
-    if (!data) {
-      console.log('No Gmail tokens found for user');
+
+    if (!account || !account.access_token) {
+      console.log('No Gmail account found with valid tokens');
       return null;
     }
 
     // Check if token needs refresh (with 5 minutes buffer)
     const currentTime = Date.now();
-    console.log('Token expiry check:', { 
-      currentTime, 
-      expiryDate: data.expiry_date,
-      needsRefresh: data.expiry_date < currentTime + 5 * 60 * 1000 
-    });
-
-    if (data.expiry_date < currentTime + 5 * 60 * 1000) {
+    if (account.expiry_date < currentTime + 5 * 60 * 1000) {
       try {
-        console.log('Token expired or expiring soon, attempting to refresh with Google API');
-        
-        // Ensure we have a refresh token
-        if (!data.refresh_token) {
-          console.error('No refresh token available for token refresh');
-          
-          // Try to sync from email_accounts as a last resort
-          if (await syncGmailTokensFromEmailAccounts()) {
-            console.log('Tokens synced from email_accounts, retrying operation');
-            // Call ourselves recursively after sync to get the fresh tokens
-            return getGmailTokens();
-          }
-          
-          // If sync failed, throw the original error
-          throw new Error('Gmail reconnection required: missing refresh token');
-        }
-        
         // Get OAuth credentials
         const credentials = await getGoogleOAuthCredentials();
         if (!credentials) {
           console.error('Missing Google OAuth credentials');
-          
-          // Try direct fallback to use tokens from email_accounts table without refresh
-          try {
-            console.log('Attempting direct fallback to email_accounts table tokens');
-            
-            // Get available Gmail accounts (sorted by default first, then most recent)
-            const { data: accounts, error: accountsError } = await supabase
-              .from('email_accounts')
-              .select('*')
-              .eq('user_id', session.user.id)
-              .eq('provider', 'gmail')
-              .order('is_default', { ascending: false })
-              .order('created_at', { ascending: false });
-              
-            // Use the first account with a valid access token
-            if (!accountsError && accounts && accounts.length > 0) {
-              const validAccount = accounts.find(acc => acc.access_token);
-              
-              if (validAccount) {
-                console.log('Found valid token in email_accounts table, using directly');
-                return {
-                  access_token: validAccount.access_token,
-                  refresh_token: validAccount.refresh_token || '',
-                  expiry_date: validAccount.expiry_date
-                };
-              }
-            }
-          } catch (fallbackError) {
-            console.error('Error in direct email_accounts fallback:', fallbackError);
-          }
-          
-          // If direct fallback failed too, return existing token
-          console.log('No OAuth credentials and no fallback, using existing token');
           return {
-            access_token: data.access_token,
-            refresh_token: data.refresh_token,
-            expiry_date: data.expiry_date
+            access_token: account.access_token,
+            refresh_token: account.refresh_token || '',
+            expiry_date: account.expiry_date
           };
         }
-        
-        console.log('Using OAuth credentials to refresh token');
+
         const { clientId, clientSecret } = credentials;
         
+        // Only attempt refresh if we have a refresh token
+        if (!account.refresh_token) {
+          console.error('No refresh token available');
+          return {
+            access_token: account.access_token,
+            refresh_token: '',
+            expiry_date: account.expiry_date
+          };
+        }
+
         const requestBody = new URLSearchParams({
           client_id: clientId,
           client_secret: clientSecret,
-          refresh_token: data.refresh_token,
+          refresh_token: account.refresh_token,
           grant_type: 'refresh_token',
         });
-        
-        // Log the actual request being sent (without sensitive values)
-        console.log('Refresh token request:', {
-          endpoint: 'https://oauth2.googleapis.com/token',
-          method: 'POST',
-          params: {
-            client_id: clientId.substring(0, 5) + '...',
-            refresh_token: 'present: ' + (data.refresh_token ? 'yes' : 'no'),
-            grant_type: 'refresh_token',
-          }
-        });
 
-        // Direct refresh with Google's token endpoint
         const response = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
           headers: {
@@ -366,48 +265,57 @@ export const getGmailTokens = async (): Promise<GmailTokens | null> => {
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Failed to refresh token with Google API:', errorText);
-          console.log('Using existing token as fallback');
-          // Return existing token as fallback
+          console.error('Failed to refresh token');
           return {
-            access_token: data.access_token,
-            refresh_token: data.refresh_token,
-            expiry_date: data.expiry_date
+            access_token: account.access_token,
+            refresh_token: account.refresh_token,
+            expiry_date: account.expiry_date
           };
         }
 
         const refreshedData = await response.json();
-        console.log('Successfully refreshed token with Google API:', refreshedData);
-
-        // Create new tokens object
+        
+        // Update the account with new tokens
         const refreshedTokens = {
           access_token: refreshedData.access_token,
-          // Keep the existing refresh token if not provided in the response
-          refresh_token: refreshedData.refresh_token || data.refresh_token,
-          // Calculate expiry date from expires_in
+          refresh_token: refreshedData.refresh_token || account.refresh_token,
           expiry_date: Date.now() + (refreshedData.expires_in || 3600) * 1000
         };
 
-        // Update tokens in database
-        await updateGmailTokens(refreshedTokens);
+        const { error: updateError } = await supabase
+          .from('email_accounts')
+          .update({
+            access_token: refreshedTokens.access_token,
+            refresh_token: refreshedTokens.refresh_token,
+            expiry_date: refreshedTokens.expiry_date,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', account.id);
+
+        if (updateError) {
+          console.error('Error updating tokens:', updateError);
+          return {
+            access_token: account.access_token,
+            refresh_token: account.refresh_token,
+            expiry_date: account.expiry_date
+          };
+        }
 
         return refreshedTokens;
       } catch (error) {
         console.error('Error refreshing token:', error);
-        // Return existing token as fallback
         return {
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-          expiry_date: data.expiry_date
+          access_token: account.access_token,
+          refresh_token: account.refresh_token || '',
+          expiry_date: account.expiry_date
         };
       }
     }
 
     return {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expiry_date: data.expiry_date
+      access_token: account.access_token,
+      refresh_token: account.refresh_token || '',
+      expiry_date: account.expiry_date
     };
   } catch (error) {
     console.error('Error in getGmailTokens:', error);
@@ -500,22 +408,7 @@ export const removeGmailTokens = async (): Promise<void> => {
 export const isGmailConnected = async (): Promise<boolean> => {
   try {
     const tokens = await getGmailTokens();
-    if (!tokens) {
-      return false;
-    }
-
-    // Make sure we have both access token and refresh token
-    if (!tokens.access_token || !tokens.refresh_token) {
-      console.error('Missing required token fields:', {
-        hasAccessToken: !!tokens.access_token,
-        hasRefreshToken: !!tokens.refresh_token
-      });
-      return false;
-    }
-
-    // If we have tokens and getGmailTokens already handles refresh,
-    // we can consider Gmail connected
-    return true;
+    return !!(tokens?.access_token);
   } catch (error) {
     console.error('Error in isGmailConnected:', error);
     return false;
@@ -523,15 +416,11 @@ export const isGmailConnected = async (): Promise<boolean> => {
 };
 
 /**
- * Forces Gmail account reconnection by first removing existing tokens
+ * Forces Gmail account reconnection
  */
 export const reconnectGmailAccount = async (): Promise<void> => {
   try {
     console.log('Initiating Gmail account reconnection');
-    // First remove existing tokens
-    await removeGmailTokens();
-    
-    // Redirect to the OAuth start endpoint
     window.location.href = '/api/gmail-oauth/start';
   } catch (error) {
     console.error('Error in reconnectGmailAccount:', error);

@@ -5,8 +5,25 @@ import { cookies } from 'next/headers';
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  if (!code) return NextResponse.redirect(`${baseUrl}/settings?error=no_code`);
+  
+  // Get the base URL with fallback to request origin
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || url.origin;
+  console.log('OAuth callback environment:', {
+    baseUrl,
+    hasClientId: !!process.env.GOOGLE_CLIENT_ID,
+    hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    requestUrl: url.toString()
+  });
+  
+  if (!code) {
+    console.error('No authorization code provided in callback');
+    return NextResponse.redirect(`${baseUrl}/settings?error=no_code`);
+  }
+
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    console.error('Missing required Google OAuth credentials');
+    return NextResponse.redirect(`${baseUrl}/settings?error=missing_credentials`);
+  }
 
   // Exchange code for tokens
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
@@ -14,14 +31,26 @@ export async function GET(request: Request) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
       redirect_uri: `${baseUrl}/api/gmail-oauth/callback`,
       grant_type: 'authorization_code'
     })
   });
+
+  if (!tokenRes.ok) {
+    const errorText = await tokenRes.text();
+    console.error('Token exchange failed:', {
+      status: tokenRes.status,
+      error: errorText,
+      redirectUri: `${baseUrl}/api/gmail-oauth/callback`
+    });
+    return NextResponse.redirect(`${baseUrl}/settings?error=token_exchange_failed&details=${encodeURIComponent(errorText)}`);
+  }
+
   const tokenData = await tokenRes.json();
   if (!tokenData.access_token) {
+    console.error('No access token in response:', tokenData);
     return NextResponse.redirect(`${baseUrl}/settings?error=token_exchange_failed`);
   }
 
@@ -65,7 +94,7 @@ export async function GET(request: Request) {
       .from('email_accounts')
       .update({
         access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token || 'EMPTY', // Fallback in case no refresh token
+        refresh_token: tokenData.refresh_token || null,
         expiry_date: expiryDate,
         display_name: userInfo.name || userInfo.email,
         updated_at: new Date().toISOString()
@@ -78,14 +107,18 @@ export async function GET(request: Request) {
     }
   } else {
     // Check if this is the first account for this user
-    const { data: accountCount, error: countError } = await supabase
+    const { count: accountCount, error: countError } = await supabase
       .from('email_accounts')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id);
 
-    // Set as default if this is the first account (accountCount is 0)
-    // Make sure we check the count properly even if there was an error in the query
-    const isFirstAccount = !countError && accountCount !== null && accountCount.length === 0;
+    if (countError) {
+      console.error('Error checking account count:', countError);
+      return NextResponse.redirect(`${baseUrl}/settings?error=count_failed`);
+    }
+
+    // Set as default if this is the first account
+    const isFirstAccount = accountCount === 0;
 
     // Create new account
     const { error: insertError } = await supabase
@@ -95,10 +128,10 @@ export async function GET(request: Request) {
         email: userInfo.email,
         provider: 'gmail',
         access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token || 'EMPTY',
+        refresh_token: tokenData.refresh_token || null,
         expiry_date: expiryDate,
         display_name: userInfo.name || userInfo.email,
-        is_default: isFirstAccount, // Only set as default if it's the first account
+        is_default: isFirstAccount,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });

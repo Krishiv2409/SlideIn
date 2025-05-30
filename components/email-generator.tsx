@@ -295,15 +295,7 @@ export function EmailGenerator() {
         console.error('DEBUG: Error during initial session refresh:', error);
       }
       
-      // Attempt to sync Gmail tokens between tables
-      try {
-        const syncResult = await syncGmailTokensFromEmailAccounts();
-        console.log('DEBUG: Gmail token sync result:', syncResult);
-      } catch (error) {
-        console.error('DEBUG: Error syncing Gmail tokens:', error);
-      }
-      
-      // Load accounts regardless of session refresh outcome
+      // Load accounts
       await loadEmailAccounts();
     };
     

@@ -18,12 +18,16 @@ export async function createEmailTrackingEvent(
 }> {
   console.log('createEmailTrackingEvent called with:', { recipientEmail, subject, hasUserId: !!userId });
   
+  // Check if we have the service role key
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('Missing SUPABASE_SERVICE_ROLE_KEY - required for email tracking');
+    throw new Error('Server configuration error - missing required service role key');
+  }
+  
   // Use the service role key for admin access to bypass RLS
-  // The service role is only used server-side in API routes
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    // Use service role key for the server context to bypass RLS
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.SUPABASE_SERVICE_ROLE_KEY
   )
   
   console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -63,13 +67,10 @@ export async function createEmailTrackingEvent(
       status: 'Sent',
       sent_at: now,
       // Start with 0 opens
-      opens: 0
+      opens: 0,
+      // Always include user_id, even if null
+      user_id: userId
     };
-    
-    // Only add the user_id field if there is a user ID available
-    if (userId) {
-      Object.assign(record, { user_id: userId });
-    }
     
     console.log('Inserting record into email_events:', record);
     
@@ -86,7 +87,9 @@ export async function createEmailTrackingEvent(
     console.log('Insert successful, returned data:', data);
 
     // Generate the tracking pixel HTML using edge function approach
-    const edgeFunctionUrl = `https://ozzijihomyzoxodqpcin.functions.supabase.co/tracker?id=${emailId}`
+    const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/(.*?)\.supabase/)?.[1] || 'ozzijihomyzoxodqpcin';
+    const edgeFunctionUrl = `https://${projectRef}.supabase.co/functions/v1/tracker?id=${emailId}`;
+    
     // Don't log the full URL to prevent false triggers
     console.log('Edge function prepared for tracking ID:', emailId);
     
@@ -96,12 +99,11 @@ export async function createEmailTrackingEvent(
     const randomId = crypto.randomUUID().replaceAll('-', '');
     const cacheBustParam = `&t=${timestamp}&r=${randomId}&cb=${Math.random().toString(36).substring(2, 15)}`;
     
-    // Create the tracking pixel HTML with both an img tag and a background image for better coverage
+    // Create the tracking pixel HTML with just an img tag
     const trackingPixelHtml = `
 <!-- Email tracking pixel (transparent 1x1 image) -->
 <div style="display:block; position:absolute; left:-9999px; top:-9999px;">
   <img src="${edgeFunctionUrl}${cacheBustParam}" width="1" height="1" alt="" style="display:block; width:1px; height:1px;" />
-  <div style="background-image:url('${edgeFunctionUrl}${cacheBustParam}&m=2');width:1px;height:1px;"></div>
 </div>
 
 <!-- Tracking ID: ${emailId} -->

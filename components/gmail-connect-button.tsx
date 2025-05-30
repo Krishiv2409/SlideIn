@@ -119,7 +119,7 @@ export function GmailConnectButton({
             ].join(' ')
           },
           skipBrowserRedirect: false,
-          redirectTo: `${window.location.origin}/api/gmail-auth/callback`
+          redirectTo: `${window.location.origin}/api/gmail-oauth/callback`
         }
       });
 

@@ -36,26 +36,33 @@ Deno.serve(async (req: Request) => {
   try {
     console.log('Recording open for email ID:', emailId)
     
-    // Simple direct update without using complex RPC
-    // First, check if this email is already opened
-    const { data: existingRecord } = await supabase
+    // First, check if this email exists and get its current state
+    const { data: existingRecord, error: fetchError } = await supabase
       .from('email_events')
       .select('email_id, status, opens, last_opened')
       .eq('email_id', emailId)
       .single()
     
-    if (existingRecord) {
-      // Update the record
-      await supabase
+    if (fetchError) {
+      console.error('Error fetching record:', fetchError)
+      // Continue to return the GIF even if there's an error
+    } else if (existingRecord) {
+      // Update the record with new open information
+      const { error: updateError } = await supabase
         .from('email_events')
         .update({
           opens: (existingRecord.opens || 0) + 1,
           last_opened: now.toISOString(),
-          status: 'Opened'
+          status: 'Opened',
+          updated_at: now.toISOString()
         })
         .eq('email_id', emailId)
       
-      console.log(`Successfully updated email ID: ${emailId}, opens: ${(existingRecord.opens || 0) + 1}`)
+      if (updateError) {
+        console.error('Error updating record:', updateError)
+      } else {
+        console.log(`Successfully updated email ID: ${emailId}, opens: ${(existingRecord.opens || 0) + 1}`)
+      }
     } else {
       console.error('Email record not found for ID:', emailId)
     }
