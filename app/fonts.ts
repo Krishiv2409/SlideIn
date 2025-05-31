@@ -3,7 +3,10 @@ import localFont from 'next/font/local'
 
 export const inter = Inter({ 
   subsets: ["latin"],
-  variable: "--font-inter"
+  variable: "--font-inter",
+  display: 'swap',
+  preload: true,
+  fallback: ['system-ui', 'arial']
 }) 
 
 export const satoshi = localFont({

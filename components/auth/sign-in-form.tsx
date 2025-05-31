@@ -45,7 +45,7 @@ export function SignInForm() {
         throw error
       }
 
-      router.push("/")
+      router.push("/email-generator")
       router.refresh()
     } catch (error: any) {
       console.error('Error signing in:', error)

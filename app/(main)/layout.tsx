@@ -1,11 +1,8 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
 import "@/app/globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { LayoutWrapper } from "@/components/layout-wrapper"
-
-const inter = Inter({ subsets: ["latin"] })
+import { ThemeWrapper } from "@/components/theme-wrapper"
+import { inter } from "@/app/fonts"
 
 export const metadata: Metadata = {
   title: "SlideIn - AI-Powered Cold Email Tool",
@@ -19,10 +16,8 @@ export default function MainLayout({
   children: React.ReactNode
 }>) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-      <LayoutWrapper>
-        {children}
-      </LayoutWrapper>
-    </ThemeProvider>
+    <ThemeWrapper>
+      {children}
+    </ThemeWrapper>
   )
 } 
