@@ -6,12 +6,37 @@ import { cookies } from 'next/headers';
 // in the app_settings table to be used for token refreshing
 export async function POST(request: Request) {
   try {
-    // Get cookies for server-side Supabase client
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { get: (name) => cookieStore.get(name)?.value } }
+      {
+        cookies: {
+          async get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+          async set(name: string, value: string, options: any) {
+            try {
+              cookieStore.set({
+                name,
+                value,
+                ...options,
+              });
+            } catch (error) {
+              // Handle cookie setting error
+              console.error('Error setting cookie:', error);
+            }
+          },
+          async remove(name: string, options: any) {
+            try {
+              cookieStore.delete(name);
+            } catch (error) {
+              // Handle cookie deletion error
+              console.error('Error deleting cookie:', error);
+            }
+          },
+        },
+      }
     );
     
     // Check authorization (user is logged in and has admin role)

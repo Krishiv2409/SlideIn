@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, forwardRef } from 'react';
 import { Button } from './ui/button';
 import { Mail } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,14 +17,14 @@ interface GmailConnectButtonProps {
   redirectAfterSuccess?: boolean;
 }
 
-export function GmailConnectButton({
+export const GmailConnectButton = forwardRef<HTMLButtonElement, GmailConnectButtonProps>(({
   onSuccess,
   variant = 'default',
   size = 'default',
   className = '',
   disabled = false,
   redirectAfterSuccess = true
-}: GmailConnectButtonProps) {
+}, ref) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const router = useRouter();
@@ -145,6 +145,7 @@ export function GmailConnectButton({
       variant={variant}
       size={size}
       className={className}
+      ref={ref}
     >
       {isLoading ? (
         <Mail className="mr-2 h-4 w-4 animate-spin" />
@@ -156,4 +157,4 @@ export function GmailConnectButton({
       {isConnected ? 'Gmail Connected' : 'Connect Gmail'}
     </Button>
   );
-} 
+}); 

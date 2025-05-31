@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { GmailConnectButton } from './gmail-connect-button';
 import { Mail, AlertCircle } from 'lucide-react';
@@ -14,8 +14,9 @@ interface EmailConnectProps {
 }
 
 export function EmailConnect({ onSuccess, className = '' }: EmailConnectProps) {
-  // State to track if Gmail is connected through the GmailConnectButton
+  // State to track if Gmail is connecting through the GmailConnectButton
   const [isGmailConnecting, setIsGmailConnecting] = useState(false);
+  const gmailButtonRef = useRef<HTMLButtonElement>(null);
   
   // Control Gmail button animation state
   const [isGmailHovered, setIsGmailHovered] = useState(false);
@@ -26,6 +27,13 @@ export function EmailConnect({ onSuccess, className = '' }: EmailConnectProps) {
       onSuccess();
     }
   };
+
+  useEffect(() => {
+    if (isGmailConnecting && gmailButtonRef.current) {
+      gmailButtonRef.current.click();
+      setIsGmailConnecting(false);
+    }
+  }, [isGmailConnecting]);
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -123,12 +131,7 @@ export function EmailConnect({ onSuccess, className = '' }: EmailConnectProps) {
           <div className="hidden">
             <GmailConnectButton 
               onSuccess={handleGmailSuccess}
-              ref={(btn) => {
-                if (isGmailConnecting && btn) {
-                  (btn as any).click();
-                  setIsGmailConnecting(false);
-                }
-              }}
+              ref={gmailButtonRef}
             />
           </div>
         </motion.div>
