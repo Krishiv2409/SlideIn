@@ -175,7 +175,6 @@ export function EmailGenerator() {
   const [selectedAccount, setSelectedAccount] = useState<string>('')
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true)
   const [trackingEnabled, setTrackingEnabled] = useState(true)
-  const [privacyConsent, setPrivacyConsent] = useState(false)
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -446,11 +445,6 @@ export function EmailGenerator() {
     
     if (!recipientEmail) {
       toast.error("Please enter a recipient email address");
-      return;
-    }
-
-    if (!privacyConsent) {
-      toast.error("Please agree to the Privacy Policy before sending");
       return;
     }
     
