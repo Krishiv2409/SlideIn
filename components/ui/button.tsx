@@ -33,7 +33,7 @@ const buttonVariants = cva(
   }
 )
 
-export interface ButtonProps
+interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
@@ -42,8 +42,8 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
-    // Remove fdprocessedid from props to prevent hydration mismatch
-    const { fdprocessedid, ...restProps } = props
+    // Remove fdprocessedid from props using type assertion
+    const { fdprocessedid, ...restProps } = props as { fdprocessedid?: string } & typeof props
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
@@ -55,4 +55,5 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 )
 Button.displayName = "Button"
 
+export type { ButtonProps }
 export { Button, buttonVariants }
